@@ -51,7 +51,7 @@ export class Stage1 implements Stage {
     const [x, y] = starts[cp];
     return {
       x, y,
-      after: cp === 2 ? () => { g.player.body.y = 15 * TS; g.player.body.vy = -5.5; g.gfx.camY = 0; } : undefined,
+      after: cp === 2 ? () => { for (const p of g.players) { p.body.y = 15 * TS; p.body.vy = -5.5; } g.gfx.camY = 0; } : undefined,
     };
   }
 

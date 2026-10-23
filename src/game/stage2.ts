@@ -111,8 +111,7 @@ export class Stage2 implements Stage {
           // any bikers still riding along peel off ahead
           for (const e of g.enemies) if (e instanceof Biker) e.phase = 'leave';
           // launched out of the bed
-          const p = g.player;
-          if (p.alive) { p.body.vy = -6.5; p.curl = true; p.jumpHeld = false; p.invuln = Math.max(p.invuln, 100); }
+          for (const p of g.livePlayers()) if (p.alive) { p.body.vy = -6.5; p.curl = true; p.jumpHeld = false; p.invuln = Math.max(p.invuln, 100); }
         }
         if (this.crashed) g.scrollVx *= 0.95;
         gx.camX += g.scrollVx;
@@ -150,14 +149,17 @@ export class Stage2 implements Stage {
     const j = this.jeep;
     if (j) {
       if (j.state === 'drive') {
-        const p = g.player, d = this.deck(), inp = g.input;
-        if (this.state === 'ride' && p.alive && d && !inp.held('lock')) {
-          if (inp.held('right') && p.body.x >= d.x1 - 0.5) this.jeepSX = Math.min(JEEP_MAX, this.jeepSX + 1.5);
-          if (inp.held('left') && p.body.x <= d.x0 + 0.5) this.jeepSX = Math.max(JEEP_MIN, this.jeepSX - 1.5);
+        const d = this.deck();
+        for (const p of g.livePlayers()) {
+          const inp = g.padOf(p);
+          if (this.state === 'ride' && p.alive && d && !inp.held('lock')) {
+            if (inp.held('right') && p.body.x >= d.x1 - 0.5) this.jeepSX = Math.min(JEEP_MAX, this.jeepSX + 1.5);
+            if (inp.held('left') && p.body.x <= d.x0 + 0.5) this.jeepSX = Math.max(JEEP_MIN, this.jeepSX - 1.5);
+          }
         }
         const nx = g.gfx.camX + this.jeepSX;
-        // the player rides along with the jeep's shift
-        if (p.alive && d && p.state === 'play') p.body.x += nx - j.x - g.scrollVx;
+        // the players ride along with the jeep's shift
+        for (const p of g.livePlayers()) if (p.alive && d && p.state === 'play') p.body.x += nx - j.x - g.scrollVx;
         j.x = nx;
       }
       j.update();

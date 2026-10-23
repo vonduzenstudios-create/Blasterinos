@@ -210,8 +210,8 @@ export class SandWorm implements Hittable {
         this.open = 2;
         if (this.hy <= this.idleY + 10) { this.hy = this.idleY + 10; this.set('gasp'); }
         // the eruption column is deadly
-        const p = g.player;
-        if (p.alive) {
+        for (const p of g.livePlayers()) {
+          if (!p.alive) continue;
           const b = p.box();
           if (b[2] > this.baseX - 20 && b[0] < this.baseX + 20 && b[3] > this.hy - 50) p.hurt();
         }

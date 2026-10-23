@@ -1,0 +1,17 @@
+# Render Blueprint for the Blasterinos online co-op relay.
+# Dashboard > New > Blueprint, pick this repo, and Render creates the service below.
+services:
+  - type: web
+    name: blasterinos-net
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ALLOWED_ORIGINS
+        value: https://vonduzenstudios-create.github.io,http://localhost:5173

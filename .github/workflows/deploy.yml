@@ -25,6 +25,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          # co-op relay address; set the NET_URL repository variable if Render gives the service a different URL
+          VITE_NET_URL: ${{ vars.NET_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
