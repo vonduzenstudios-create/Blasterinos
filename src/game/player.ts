@@ -26,7 +26,7 @@ const GRAV = 0.22, MAXFALL = 5.5, JUMP_CUT = 2.4;
 /** Hand-over-hand speed along a rail. */
 const CLIMB_SPEED = 1.05;
 /** Frames between shots while the button is held (mashing is limited only by the weapon). */
-const HOLD_RATE: Record<string, number> = { R: 16, M: 0, S: 22, L: 26, H: 18, F: 0 };
+const HOLD_RATE: Record<string, number> = { R: 16, M: 0, S: 22, L: 26, H: 18, F: 0, C: 22 };
 
 /** hook: frozen in place while the grapple flies up. hang: holding on to a rail. */
 type State = 'play' | 'hook' | 'reel' | 'hang' | 'dying' | 'dead';

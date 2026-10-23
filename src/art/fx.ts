@@ -60,6 +60,8 @@ export interface FxArt {
   capsule: Frame[];
   medal: Frame; slot: Frame;
   ring: Frame[];
+  /** The Crush shell's detonation: a white-hot core inside an expanding shock ring. */
+  crush: Frame[]; crush2: Frame[];
 }
 
 function laserFrame(len: number, w: number, cols: number[]): Frame {
@@ -99,6 +101,47 @@ function flameFrames(): Frame[] {
     }
     p.circle(6, 6, 2, hot[0]);
     out.push(frame(p, 6, 6));
+  }
+  return out;
+}
+
+/** Crush shell: a squat steel warhead with a glowing charge band and a short exhaust flicker. */
+function crushShell(): Frame[] {
+  return [0, 1].map((k) => {
+    const p = new Pix(14, 9);
+    p.shape([rgb('#3a3e4e'), rgb('#7a8098'), rgb('#c8d0e0')], (c, id) => { p.rect(3, 2, 7, 5, c, id); p.ellipse(10, 4.5, 3, 2.5, c, id); }, 1);
+    p.rect(6, 2, 2, 5, k ? rgb('#ffe070') : rgb('#ff8a20'));
+    p.set(12, 4, rgb('#ffffff'));
+    p.rect(2, 1, 2, 1, rgb('#5a6070')); p.rect(2, 7, 2, 1, rgb('#5a6070'));
+    p.rect(0, 3, 3 - k, 3, rgb('#ffd040')); p.set(0, 4, rgb('#ff8a20'));
+    p.outline(OUTLINE);
+    return frame(p, 7, 4.5);
+  });
+}
+
+/** Detonation drawn at radius R (one size per weapon level, so the pixels stay crisp). */
+function crushBlast(R: number): Frame[] {
+  const out: Frame[] = [];
+  const S = R * 2 + 4, c = S / 2;
+  const rng = new RNG(21);
+  const rays = Array.from({ length: 10 }, (_, i) => ({ a: (i / 10) * Math.PI * 2 + rng.range(-0.2, 0.2), l: rng.range(0.55, 0.95) }));
+  const n = 7;
+  for (let f = 0; f < n; f++) {
+    const t = f / (n - 1);
+    const p = new Pix(S, S);
+    const ring = R * (0.35 + t * 0.65), core = R * 0.55 * (1 - t);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const d = Math.hypot(x + 0.5 - c, y + 0.5 - c);
+      const band = Math.abs(d - ring);
+      if (band < 2.2 - t) p.set(x, y, band < 1 ? (t < 0.5 ? hot[0] : hot[2]) : hot[t < 0.5 ? 2 : 3]);
+      else if (d < core) p.set(x, y, hot[Math.min(4, Math.floor((d / core) * 3 + t * 2))]);
+    }
+    // jagged spikes thrown out with the shock front
+    if (t < 0.7) for (const r of rays) {
+      const r0 = core, r1 = ring * r.l + 2;
+      for (let s = r0; s < r1; s += 0.7) p.set(c + Math.cos(r.a) * s, c + Math.sin(r.a) * s, s < r1 * 0.6 ? hot[1] : hot[3]);
+    }
+    out.push(frame(p, c, c));
   }
   return out;
 }
@@ -196,7 +239,7 @@ export function buildFx(): FxArt {
     boomS: explosionFrames(10, 3, 7), boomM: explosionFrames(18, 5, 9), boomL: explosionFrames(34, 8, 11),
     bullet: {
       R: [orb(2.2, yellow)], M: [orb(2.6, red)], S: [orb(3.2, red), orb(2.9, red)],
-      L: [laserFrame(22, 2, cyan)], L2: [laserFrame(30, 3, cyan)], H: missile(), F: flameFrames(),
+      L: [laserFrame(22, 2, cyan)], L2: [laserFrame(30, 3, cyan)], H: missile(), F: flameFrames(), C: crushShell(),
     },
     enemyBullet: [orb(2.6, pink), orb(2.2, pink)],
     fireball: flameFrames().map((f) => f),
@@ -206,9 +249,11 @@ export function buildFx(): FxArt {
     falcon: {
       M: falconFrames('M', '#c02020'), S: falconFrames('S', '#c02020'), L: falconFrames('L', '#2050d0'),
       H: falconFrames('H', '#20a040'), F: falconFrames('F', '#e07010'), B: falconFrames('B', '#8030c0'),
+      C: falconFrames('C', '#5a6478'),
     },
     capsule: capsuleFrames(),
     medal: frame(medalP, 0, 0), slot: frame(slotP, 0, 0),
     ring: ringFrames,
+    crush: crushBlast(26), crush2: crushBlast(36),
   };
 }

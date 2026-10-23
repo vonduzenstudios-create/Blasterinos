@@ -327,6 +327,7 @@ function buildSpawns(w: SnowWorld): Spawn[] {
     { kind: k('grenadier'), x: px(230), y: gy(230) },
     { kind: 'sniper', x: px(241), y: py(20) },
     { kind: 'capsule', x: px(248), y: gy(248) - 90, arg: 'H' },
+    { kind: 'capsule', x: px(296), y: gy(296) - 90, arg: 'C' },
     { kind: 'turret', x: px(262), y: gy(262) },
     { kind: 'rifleBag', x: px(272), y: py(24) },
     { kind: k('balls'), x: px(266), y: gy(266), arg: [px(286), px(256), px(282), 160] },

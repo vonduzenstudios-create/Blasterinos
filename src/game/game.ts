@@ -384,7 +384,13 @@ export class Game {
         const eb = e.box();
         if (bb[0] < eb[2] && bb[2] > eb[0] && bb[1] < eb[3] && bb[3] > eb[1]) {
           // invulnerable parts only stop bullets if they are solid armor (deflect)
-          if (e.invulnerable) { if (e.deflect && !b.pierce) { b.dead = true; this.audio.sfx('clink', 0.4); } continue; }
+          if (e.invulnerable) {
+            if (b.kind === 'C' && e.deflect) { b.detonate(); break; }
+            if (e.deflect && !b.pierce) { b.dead = true; this.audio.sfx('clink', 0.4); }
+            continue;
+          }
+          // Crush shells burst on contact; the blast deals the damage to everything nearby
+          if (b.kind === 'C') { b.detonate(); break; }
           e.hit(b.dmg, this);
           b.hitSet.add(e);
           if (!b.pierce) { b.dead = true; if (b.kind === 'H') explode(this, b.x, b.y, 'S', false); break; }

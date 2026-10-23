@@ -17,7 +17,7 @@ export function run() {
     groups.push([k, [...Object.values(h.stand), ...Object.values(h.air), ...h.run.f, h.prone, ...h.curl, h.hang, h.hurt, h.dead]]);
   }
   const fx = buildFx();
-  groups.push(['fx', [...fx.boomM, ...Object.values(fx.bullet).flat(), ...fx.enemyBullet, ...fx.spit, ...fx.flash, ...fx.splash, fx.hook, ...Object.values(fx.falcon).map((f) => f[0]), ...fx.capsule]]);
+  groups.push(['fx', [...fx.boomM, ...Object.values(fx.bullet).flat(), ...fx.enemyBullet, ...fx.spit, ...fx.flash, ...fx.splash, fx.hook, ...Object.values(fx.falcon).map((f) => f[0]), ...fx.capsule, ...fx.crush, ...fx.crush2]]);
   const e = buildEnemyArt();
   groups.push(['enemies', [e.soldier.stand.f, e.sniper.stand.uf, ...e.soldierRun, ...e.turret.slice(0, 6), e.turretClosed, e.leaper.crouch, e.leaper.jump, ...e.drone, ...e.crawler, e.sandbag]]);
   groups.push(['gate', [e.gate.intact, ...e.gate.core, ...e.gate.cannon]]);

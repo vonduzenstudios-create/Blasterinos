@@ -1,14 +1,14 @@
 import type { Sprite } from '../engine/gfx';
 import { VW, VH } from '../engine/gfx';
 import type { Game } from './game';
-import { Anim, spark } from './effects';
+import { Anim, spark, explode } from './effects';
 import { T, TS } from '../art/tiles';
 
-export type WeaponKind = 'R' | 'M' | 'S' | 'L' | 'H' | 'F';
+export type WeaponKind = 'R' | 'M' | 'S' | 'L' | 'H' | 'F' | 'C';
 export interface Weapon { kind: WeaponKind; level: number; }
 
 export const WEAPON_NAMES: Record<WeaponKind, string> = {
-  R: 'RIFLE', M: 'MACHINE GUN', S: 'SPREAD', L: 'LASER', H: 'HOMING', F: 'FLAME',
+  R: 'RIFLE', M: 'MACHINE GUN', S: 'SPREAD', L: 'LASER', H: 'HOMING', F: 'FLAME', C: 'CRUSH',
 };
 
 export interface Hittable {
@@ -27,7 +27,7 @@ export class PlayerBullet {
   hitSet = new Set<Hittable>();
   life: number;
   constructor(public g: Game, public kind: WeaponKind | 'L2', public x: number, public y: number, public vx: number, public vy: number,
-    public dmg: number, public pierce = false, life = 90, public w = 4) {
+    public dmg: number, public pierce = false, life = 90, public w = 4, /** Crush only: blast radius on detonation. */ public blast = 0) {
     const fx = g.assets.fx.bullet;
     const frames = fx[kind];
     this.sprite = g.gfx.sprite(frames[0], 35, kind === 'L' || kind === 'L2' || kind === 'F');
@@ -38,7 +38,7 @@ export class PlayerBullet {
     const frames = this.g.assets.fx.bullet[this.kind];
     this.sprite.setFrame(frames[Math.floor(this.t / 3) % frames.length]);
     this.sprite.x = this.x; this.sprite.y = this.y;
-    if (this.kind === 'L' || this.kind === 'L2' || this.kind === 'H') {
+    if (this.kind === 'L' || this.kind === 'L2' || this.kind === 'H' || this.kind === 'C') {
       this.sprite.rot = Math.atan2(this.vy, this.vx);
     }
     this.sprite.sync();
@@ -72,17 +72,39 @@ export class PlayerBullet {
     if (this.kind === 'F') {
       this.vx *= 0.985; this.vy = this.vy * 0.985 - 0.02;
     }
+    if (this.kind === 'C') { this.vx *= 0.96; this.vy *= 0.96; }
     this.x += this.vx + g.scrollVx; this.y += this.vy;
     this.life--;
-    if (this.life <= 0) this.dead = true;
+    if (this.life <= 0) { if (this.kind === 'C') this.detonate(); else this.dead = true; }
     const cx = g.gfx.camX, cy = g.gfx.camY;
     if (this.x < cx - 30 || this.x > cx + VW + 30 || this.y < cy - 30 || this.y > cy + VH + 30) this.dead = true;
     // the fortress gate's metal is part of the boss, so shots pass into it and hit its parts
-    if (this.kind !== 'L' && this.kind !== 'L2' && g.world.solidAtPx(this.x, this.y) && g.world.get(Math.floor(this.x / TS), Math.floor(this.y / TS)) !== T.METAL) {
+    if (!this.dead && this.kind !== 'L' && this.kind !== 'L2' && g.world.solidAtPx(this.x, this.y) && g.world.get(Math.floor(this.x / TS), Math.floor(this.y / TS)) !== T.METAL) {
+      if (this.kind === 'C') { this.x -= this.vx; this.y -= this.vy; this.detonate(); return; }
       this.dead = true;
       spark(g, this.x - this.vx, this.y - this.vy);
     }
     if (!this.dead) this.sync();
+  }
+  /**
+   * Crush shells burst on contact, on walls, or when their short fuse runs out, and the
+   * blast hits everything whose hitbox reaches into the radius (armored parts shrug it off).
+   */
+  detonate() {
+    if (this.dead) return;
+    this.dead = true;
+    const g = this.g, R = this.blast;
+    for (const e of g.targets()) {
+      if (e.dead || e.invulnerable) continue;
+      const b = e.box();
+      const nx = Math.max(b[0], Math.min(this.x, b[2])), ny = Math.max(b[1], Math.min(this.y, b[3]));
+      if (Math.hypot(nx - this.x, ny - this.y) <= R) e.hit(this.dmg, g);
+    }
+    const big = R > 30;
+    g.addFx(new Anim(g, big ? g.assets.fx.crush2 : g.assets.fx.crush, this.x, this.y, 2, 41, true));
+    explode(g, this.x, this.y, big ? 'M' : 'S', false);
+    g.gfx.shake = Math.max(g.gfx.shake, big ? 4 : 3);
+    g.audio.sfx('crush');
   }
   box(): [number, number, number, number] {
     const r = this.kind === 'L' || this.kind === 'L2' ? 8 : this.w;
@@ -142,6 +164,15 @@ export function fireWeapon(g: Game, w: Weapon, x: number, y: number, ang: number
       add(new PlayerBullet(g, 'F', x, y, Math.cos(ang + j) * 4.6, Math.sin(ang + j) * 4.6, w.level > 1 ? 1 : 0.7, true, w.level > 1 ? 34 : 24, 6));
       g.audio.sfx('flame');
       return 4;
+    }
+    case 'C': {
+      // short-range shell that bursts in a blast; level 2 carries further, hits harder, two at once
+      const lv2 = w.level > 1;
+      if (count('C') >= (lv2 ? 2 : 1)) return 2;
+      const sp = lv2 ? 5.6 : 5;
+      add(new PlayerBullet(g, 'C', x, y, c * sp, s * sp, lv2 ? 7 : 5, false, lv2 ? 20 : 15, 5, lv2 ? 36 : 26));
+      g.audio.sfx('crushFire');
+      return lv2 ? 14 : 18;
     }
   }
 }

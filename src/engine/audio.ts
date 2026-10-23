@@ -148,6 +148,17 @@ export class Audio {
         this.noise(t, 0.16, 0.22 * v, out, 'lowpass', 1800, 300, 1);
         this.osc('sawtooth', 90, 60, t, 0.14, 0.08 * v, out);
         break;
+      case 'crushFire': // heavy launcher thump
+        this.osc('square', 220, 55, t, 0.16, 0.24 * v, out);
+        this.osc('p0.25', 700, 160, t, 0.08, 0.12 * v, out);
+        this.noise(t, 0.1, 0.18 * v, out, 'lowpass', 2200, 300, 1);
+        break;
+      case 'crush': // the shell bursting: a crunchy boom with a metallic snap on top
+        this.noise(t, 0.45, 0.6 * v, out, 'lowpass', 4000, 90, 1.4);
+        this.osc('sine', 160, 30, t, 0.4, 0.55 * v, out);
+        this.osc('square', 90, 40, t, 0.12, 0.2 * v, out);
+        this.noise(t, 0.06, 0.25 * v, out, 'highpass', 5000, 2500);
+        break;
       case 'enemyShot':
         this.osc('p0.5', 700, 350, t, 0.08, 0.1 * v, out);
         break;
