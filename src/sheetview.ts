@@ -42,8 +42,8 @@ export function run() {
   groups.push(['santa', [...sn.santa.stand, ...sn.santa.walk, sn.santa.crouch, sn.santa.air, sn.santa.laugh, sn.santa.down, sn.arm, ...sn.sack, ...sn.present, sn.shadow]]);
   const hv = buildHive();
   groups.push(['hive backdrops', [asFrame(hv.sky), asFrame(hv.far), asFrame(hv.near)]]);
-  groups.push(['hive props', [...hv.pod, hv.tendril, hv.eggCluster, hv.bones, ...hv.pustule, ...hv.egg, ...hv.gas]]);
-  groups.push(['hive orifices + grubs', [...hv.orifice, ...hv.grub, hv.grubCurl, ...hv.splat]]);
-  groups.push(['hive mother', [hv.lobe, ...hv.vent, hv.thorax, ...hv.head, hv.leg]]);
+  groups.push(['hive props', [...hv.pod, hv.tendril, hv.eggCluster, hv.bones, ...hv.pustule, ...hv.egg, ...hv.plasma]]);
+  groups.push(['hive brood pods + hatchlings', [...hv.broodPod, ...hv.hatchling, hv.hatchlingCurl, ...hv.splat]]);
+  groups.push(['hive queen', [hv.abdomen, hv.torso, ...hv.core, ...hv.head, hv.arm, hv.leg]]);
   showSheet(groups);
 }

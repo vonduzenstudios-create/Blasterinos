@@ -39,9 +39,9 @@ export const HIVE_SONG = song(154, true, [
   },
 ]);
 
-// ---------------- Final boss: "The Hive Mother" ----------------
-const motherChords: Chord[] = [['C', 'm'], ['C#', 'M'], ['C', 'm'], ['B', 'M'], ['C', 'm'], ['C#', 'M'], ['G#', 'M'], ['G', 'M']];
-const motherLead = `
+// ---------------- Final boss: "The Hive Queen" ----------------
+const queenChords: Chord[] = [['C', 'm'], ['C#', 'M'], ['C', 'm'], ['B', 'M'], ['C', 'm'], ['C#', 'M'], ['G#', 'M'], ['G', 'M']];
+const queenLead = `
 C6 . G5 . C6 . D#6 . D6 . C6 . G5 . D#5 .
 C#6 . G#5 . F5 . G#5 . C#6 . C6 . G#5 . F5 .
 C6 . . . G5 . . . D#6 . D6 . C6 . G5 .
@@ -51,11 +51,11 @@ C#6 . . . F6 . . . G#6 . . . F6 . C#6 .
 C6 . . . D#6 . . . G#6 . G6 . D#6 . C6 .
 B5 . . . . . . . D6 . . . G6 . . .`;
 const pound = [0, 0, 12, 0, 0, 1, 0, 12, 0, 0, 12, 0, 1, 0, 13, 12];
-export const MOTHER_SONG = song(184, true, [
-  { inst: 'lead', vol: 0.18, notes: motherLead },
-  { inst: 'lead2', vol: 0.07, notes: lower(motherLead) },
-  { inst: 'bass', vol: 0.38, notes: bassLine(motherChords, pound) },
-  { inst: 'arp', vol: 0.045, notes: arpLine(motherChords, 4) },
+export const QUEEN_SONG = song(184, true, [
+  { inst: 'lead', vol: 0.18, notes: queenLead },
+  { inst: 'lead2', vol: 0.07, notes: lower(queenLead) },
+  { inst: 'bass', vol: 0.38, notes: bassLine(queenChords, pound) },
+  { inst: 'arp', vol: 0.045, notes: arpLine(queenChords, 4) },
   {
     inst: 'drums', vol: 1, drum: drums(8,
       ['k', 'h', 'k', 'h', 's', 'h', 'k', 'k', 'k', 'h', 'k', 'h', 's', 'h', 'k', 's'],

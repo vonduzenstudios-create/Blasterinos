@@ -13,9 +13,10 @@ road and flips the jeep. Finish on foot over dunes, mesas and quicksand to the n
 Great Dune Worm. Clearing stage 1 rolls straight into stage 2 with your weapons.
 
 **Stage 5, The Alien Hive:** the final stage. A run through the guts of an alien nest, past
-acid pits, swollen acid pustules and the puckered holes the grubs keep squeezing out of, down
-to the Hive Mother. She backs into her chamber rear end first, lays eggs and breaks wind; shoot
-her vent while it is open and her head whenever you can reach it. Beating her rolls the
+acid pits, swollen acid pustules and the armored brood pods that hatchlings burst out of, down
+to the Hive Queen: a towering crested xeno with scythe forelimbs and a vast egg sac. Her core
+is sealed under armor plates that part when she fires eggs and after she slams a plasma
+shockwave along the floor; her head can be hit from the ribs. Beating her rolls the
 ending and credits.
 
 ## Play
@@ -65,7 +66,7 @@ Hold down while standing to go prone.
 
 Testing shortcut: `/?stage=2` starts on stage 2 after soldier select, and `&cp=1` or
 `&cp=2` starts from its on-foot or boss checkpoint. `/?stage=5` does the same for the hive
-(`&cp=1` halfway, `&cp=2` the Hive Mother).
+(`&cp=1` halfway, `&cp=2` the Hive Queen).
 
 ## Online co-op
 

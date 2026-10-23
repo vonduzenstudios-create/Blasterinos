@@ -1,9 +1,9 @@
-import { Pix, rgb, ramp, mix, withAlpha, RNG, frame, type Frame, type Ramp } from '../engine/pixel';
+import { Pix, rgb, ramp, mix, RNG, frame, type Frame, type Ramp } from '../engine/pixel';
 import { OUTLINE } from './humanoid';
 import { vnoise, hash, TS, SOLID, ONEWAY, TILE_PAINTERS, type TileGetter } from './tiles';
 
 // Stage 5, "The Hive": the inside of an alien nest. Resin honeycomb walls, slime,
-// glowing pods, the orifices the bugs come out of, and the Hive Mother herself.
+// glowing pods, the armored brood pods the hatchlings burst from, and the Hive Queen.
 // Everything is painted here at boot, the first time the stage is entered.
 
 export const HT = { RESIN: 40, RIB: 41 } as const;
@@ -13,12 +13,12 @@ ONEWAY.add(HT.RIB);
 export interface HiveArt {
   sky: HTMLCanvasElement; far: HTMLCanvasElement; near: HTMLCanvasElement;
   pod: Frame[]; tendril: Frame; eggCluster: Frame; bones: Frame;
-  /** clenched, straining, open, sealed (dead). Drawn pointing up, anchored at the base. */
-  orifice: Frame[];
-  grub: Frame[]; grubCurl: Frame; splat: Frame[];
+  /** closed, charging, open, dead. Drawn pointing up, anchored at the base. */
+  broodPod: Frame[];
+  hatchling: Frame[]; hatchlingCurl: Frame; splat: Frame[];
   pustule: Frame[];
-  egg: Frame[]; gas: Frame[];
-  lobe: Frame; vent: Frame[]; thorax: Frame; head: Frame[]; leg: Frame;
+  egg: Frame[]; plasma: Frame[];
+  abdomen: Frame; torso: Frame; core: Frame[]; head: Frame[]; arm: Frame; leg: Frame;
 }
 
 const C = {
@@ -28,12 +28,9 @@ const C = {
   bone: [rgb('#4a3a2a'), rgb('#8a7458'), rgb('#c8b08a'), rgb('#eee0c0')],
   membrane: [rgb('#3a1630'), rgb('#5a2448')],
 };
-// Hive Mother chitin, glossy magenta with dark banding
-const CHITIN = [rgb('#140616'), rgb('#2c0e34'), rgb('#461a50'), rgb('#62286c'), rgb('#82408a'), rgb('#a862a8'), rgb('#d898d0')];
-// sphincter flesh
-const PUCKER = [rgb('#2a0c10'), rgb('#561c20'), rgb('#84343a'), rgb('#b05a58'), rgb('#d68878'), rgb('#f4b8a2')];
-// the grubs: brown, glossy, segmented
-const GRUB = [rgb('#1e1006'), rgb('#3a2210'), rgb('#5a3818'), rgb('#7a5226'), rgb('#9c6c34'), rgb('#c4924e')];
+// dark, glossy blue-black chitin, the Queen's and her brood's
+const CHITIN = [rgb('#04060a'), rgb('#0a1018'), rgb('#141e2a'), rgb('#20303e'), rgb('#304656'), rgb('#4a6a7a'), rgb('#7aa4b0')];
+const ICHOR = [rgb('#0a2a1a'), rgb('#1a5a2a'), rgb('#3aa040'), rgb('#8ae050'), rgb('#e8ffa0')];
 const GLOW: Ramp = ramp('#3a7a1a', '#8ae040', '#e8ffa0');
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -269,9 +266,10 @@ function eggCluster(): Frame {
   for (let i = 0; i < 7; i++) {
     const x = 6 + i * 5 + rng.range(-1, 1), y = 13 - (i % 2) * 3;
     const id = p.newPart();
-    p.ellipse(x, y, 5, 7, rgb('#b8b888'), id);
-    p.volume(id, [rgb('#3a4020'), rgb('#6a7040'), rgb('#9aa060'), rgb('#c8c890'), rgb('#eef0c0')], { flat: 0.8 });
-    p.over(x, y - 7, rgb('#5a6030'));
+    p.ellipse(x, y, 5, 7, CHITIN[4], id);
+    p.volume(id, CHITIN.slice(1), { flat: 0.8 });
+    // the four-way seam on top glows faintly
+    p.over(x, y - 6, ICHOR[2]); p.over(x - 1, y - 5, ICHOR[1]); p.over(x + 1, y - 5, ICHOR[1]); p.over(x, y - 4, ICHOR[1]);
   }
   for (let x = 0; x < 44; x++) for (let y = 18; y < 22; y++) p.set(x, y, y === 18 ? C.slime[2] : C.slime[1]);
   p.outline(OUTLINE);
@@ -290,98 +288,99 @@ function bones(): Frame {
   return frame(p, 20, 14);
 }
 
-// ---------------------------------------------------------------- the orifices
+// ---------------------------------------------------------------- the brood pods
 
 /**
- * The holes the bugs come out of: a puckered ring nestled between two round,
- * fleshy mounds. It is a nest vent. It is definitely a nest vent.
- * k: 0 clenched, 1 straining, 2 open, 3 sealed.
+ * Armored brood pods grown into the hive walls. Four plated flaps seal the top;
+ * when one is ready the seams light up, the flaps peel back, and a hatchling bursts out.
+ * k: 0 closed, 1 charging, 2 open, 3 dead.
  */
-function orifice(k: number): Frame {
-  const W = 44, H = 30;
+function broodPod(k: number): Frame {
+  const W = 36, H = 36;
   const p = new Pix(W, H);
-  const cx = W / 2;
-  const strain = k === 1 ? 1 : 0;
-  // the two cheeks
-  for (const side of [-1, 1]) {
-    const id = p.newPart();
-    p.ellipse(cx + side * (10 + strain), 18 - strain, 12 + strain, 11 + strain, PUCKER[3], id);
-    p.volume(id, k === 3 ? [rgb('#1a1418'), rgb('#3a2e32'), rgb('#5a4a4c'), rgb('#7a6a6a'), rgb('#9a8a88')] : PUCKER, { flat: 0.8 });
-  }
-  // resin base it grows out of
-  for (let x = 0; x < W; x++) for (let y = 26; y < H; y++) p.set(x, y, y === 26 ? C.resin[4] : C.resin[2]);
-  // the cleft between them
-  for (let y = 9 + strain; y < 27; y++) p.set(cx, y, PUCKER[0]);
-  // the ring itself, at the top of the cleft
-  const ry = 9 - strain;
-  const rr = k === 2 ? 7 : k === 1 ? 6 : 5;
-  const ring = p.newPart();
-  p.ellipse(cx, ry, rr, rr * 0.62, PUCKER[4], ring);
-  p.volume(ring, k === 3 ? [rgb('#2a2224'), rgb('#4a3c3e'), rgb('#6a5a5a')] : [PUCKER[1], PUCKER[2], PUCKER[3], PUCKER[4], PUCKER[5]], { flat: 0.6 });
-  // wrinkles radiating from the middle
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2;
-    for (let r = (k === 2 ? 3.5 : 1); r < rr; r += 0.5) p.over(cx + Math.cos(a) * r, ry + Math.sin(a) * r * 0.62, PUCKER[k === 1 ? 2 : 1]);
-  }
-  if (k === 0) { p.set(cx, ry, PUCKER[0]); p.set(cx - 1, ry, PUCKER[1]); p.set(cx + 1, ry, PUCKER[1]); }
-  else if (k === 1) {
-    // bulging, flushed, and something is pressing from the inside
-    p.ellipse(cx, ry, 2, 1.2, GRUB[2]);
-    p.set(cx, ry - 1, GRUB[4]);
-  } else if (k === 2) {
-    p.ellipse(cx, ry, 4, 2.6, PUCKER[0]);
-    p.ellipse(cx, ry + 0.5, 2.5, 1.5, rgb('#0a0204'));
-    // a drip of goo
-    p.set(cx + 3, ry + 3, C.slime[2]); p.set(cx + 3, ry + 4, C.slime[3]);
+  const cx = W / 2, cy = 20;
+  const dead = k === 3;
+  const cols = dead ? [rgb('#08080a'), rgb('#141416'), rgb('#222226'), rgb('#323236'), rgb('#46464a'), rgb('#5a5a5e')] : CHITIN.slice(0, 6);
+  // resin roots gripping the wall
+  for (let i = 0; i < 6; i++) p.line(cx - 12 + i * 5, H - 1, cx - 8 + i * 3, H - 8, C.resin[3 + (i & 1)], 2);
+  // the shell, ribbed with ring plates
+  const shell = p.newPart();
+  p.ellipse(cx, cy, 12, 14, cols[3], shell);
+  p.volume(shell, cols, { flat: 0.85, pattern: (_x, y) => ((y - cy + 40) % 7 === 0 ? -2 : 0) });
+  // glowing veins under the plates
+  if (!dead) for (const side of [-1, 1]) for (let y = cy - 8; y < cy + 12; y++) p.over(cx + side * (7 + Math.sin(y / 3) * 1.5), y, k === 1 ? ICHOR[3] : ICHOR[1]);
+  if (k === 2) {
+    // flaps peeled back, the glowing membrane inside torn open
+    p.ellipse(cx, cy - 8, 8, 5, ICHOR[0]);
+    p.ellipse(cx, cy - 7, 5, 3, rgb('#020604'));
+    p.set(cx, cy - 7, ICHOR[3]);
+    for (const a of [-2.4, -1.9, -1.2, -0.7]) {
+      const x0 = cx + Math.cos(a) * 7, y0 = cy - 8 + Math.sin(a) * 3;
+      p.shape([cols[1], cols[3], cols[5]], (c, id) => p.poly([[x0 - 2, y0 + 2], [x0 + 2, y0 + 2], [x0 + Math.cos(a) * 9, y0 + Math.sin(a) * 6 - 2]], c, id));
+    }
+    for (let i = 0; i < 4; i++) p.over(cx - 6 + i * 4, cy - 4, ICHOR[2]);
   } else {
-    // scabbed over for good
-    p.ellipse(cx, ry, 3, 2, rgb('#2a2a1a'));
-    p.set(cx - 1, ry, rgb('#5a5a3a')); p.set(cx + 1, ry - 1, rgb('#5a5a3a'));
+    // the cross-shaped seam where the four flaps meet
+    const seam = dead ? cols[0] : k === 1 ? ICHOR[4] : ICHOR[2];
+    for (let i = -5; i <= 5; i++) { p.over(cx + i, cy - 9 + Math.abs(i) * 0.3, seam); }
+    for (let i = -4; i <= 4; i++) p.over(cx, cy - 9 + i, seam);
+    if (k === 1) { p.over(cx - 1, cy - 9, ICHOR[3]); p.over(cx + 1, cy - 9, ICHOR[3]); }
+    if (dead) for (let i = 0; i < 9; i++) p.over(cx - 3 + i * 0.8 + (i % 2), cy - 2 + i, rgb('#5a5a5e'));
   }
-  // a little sheen on each cheek
-  if (k !== 3) for (const side of [-1, 1]) { p.over(cx + side * 10 - 4, 12, PUCKER[5]); p.over(cx + side * 10 - 3, 11, PUCKER[5]); }
+  // a hard sheen on the shell
+  if (!dead) for (let i = 0; i < 5; i++) p.over(cx - 7 + i * 0.5, cy - 8 + i * 2, cols[5]);
   p.outline(OUTLINE);
   return frame(p, cx, H);
 }
 
-// ---------------------------------------------------------------- the grubs
+// ---------------------------------------------------------------- the hatchlings
 
-/** Glossy brown, segmented, about the size and shape you'd expect. With eyes. Facing right. */
-function grub(k: number): Frame {
-  const W = 26, H = 16;
+/** A sleek armored hatchling: plated back, long glowing-eyed skull, a whip of a tail. Facing right. */
+function hatchling(k: number): Frame {
+  const W = 34, H = 18;
   const p = new Pix(W, H);
-  const segs: [number, number, number, number][] = [[5, 11, 4, 3.5], [10, 10 - k, 5, 4.5], [16, 10, 5.5, 5], [21, 10 + k * 0.5, 4.5, 4.5]];
-  for (const [x, y, rx, ry] of segs) {
+  // tail first, behind everything
+  p.shape([CHITIN[1], CHITIN[2], CHITIN[4]], (c, id) => { for (let i = 0; i < 10; i++) p.line(9 - i, 9 - Math.sin(i / 3 + k) * 2 - i * 0.3, 8 - i, 9 - Math.sin((i + 1) / 3 + k) * 2 - (i + 1) * 0.3, c, i < 4 ? 3 : 2, id); });
+  p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, id) => p.poly([[0, 4], [3, 2], [3, 6]], c, id));
+  // legs: two pairs, scuttling
+  const lg = [[12, 3], [18, -3], [22, 3], [27, -2]];
+  lg.forEach(([x, ph], i) => { const o = (k ? ph : -ph) * 0.6; p.line(x, 11, x + o - 2, 16, CHITIN[2], 2); p.set(x + o - 3, 17, CHITIN[1]); if (i % 2) p.set(x + o - 2, 17, CHITIN[1]); });
+  // the body: overlapping armored plates
+  for (let i = 0; i < 3; i++) {
     const id = p.newPart();
-    p.ellipse(x, y, rx, ry, GRUB[3], id);
-    p.volume(id, GRUB, { flat: 0.85 });
+    p.ellipse(11 + i * 5, 9, 5, 4, CHITIN[3], id);
+    p.volume(id, CHITIN.slice(0, 6), { flat: 0.85 });
   }
-  // the little curl on top of the back
-  const tip = p.newPart();
-  p.ellipse(9, 5 - k, 2.5, 2.2, GRUB[3], tip);
-  p.volume(tip, GRUB, { flat: 0.9 });
-  p.set(7, 3 - k, GRUB[2]);
-  // bug eyes and mandibles at the front
-  p.circle(22, 7, 2.2, rgb('#f8f8e8')); p.circle(25, 8, 1.8, rgb('#f8f8e8'));
-  p.set(23, 7, OUTLINE); p.set(25, 8, OUTLINE);
-  p.set(25, 12, GRUB[5]); p.set(26, 13, GRUB[1]);
-  // stubby legs
-  for (let i = 0; i < 4; i++) p.set(6 + i * 5 + (k ? 1 : 0), 15, GRUB[1]);
+  // the long skull
+  const sk = p.newPart();
+  p.ellipse(27, 8, 6, 3.5, CHITIN[3], sk);
+  p.poly([[26, 5], [33, 8], [26, 11]], CHITIN[3], sk);
+  p.volume(sk, CHITIN.slice(0, 7), { flat: 0.8 });
+  // glowing eye slit and jaws
+  p.set(28, 7, ICHOR[4]); p.set(29, 7, ICHOR[3]); p.set(27, 7, ICHOR[2]);
+  p.set(32, 10, rgb('#e8e8e0')); p.set(30, 10, rgb('#e8e8e0'));
+  // ridge spines along the back
+  for (let i = 0; i < 4; i++) p.set(10 + i * 4, 4, CHITIN[5]);
   p.outline(OUTLINE);
-  return frame(p, 14, 15);
+  return frame(p, 18, 17);
 }
 
-/** Curled up, tumbling through the air. */
-function grubCurl(): Frame {
-  const p = new Pix(18, 18);
+/** Rolled into a spiked ball while it flies. */
+function hatchlingCurl(): Frame {
+  const p = new Pix(20, 20);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, id) => p.poly([[10 + Math.cos(a - 0.3) * 6, 10 + Math.sin(a - 0.3) * 6], [10 + Math.cos(a + 0.3) * 6, 10 + Math.sin(a + 0.3) * 6], [10 + Math.cos(a) * 9.5, 10 + Math.sin(a) * 9.5]], c, id));
+  }
   const id = p.newPart();
-  p.circle(9, 9, 7, GRUB[3], id);
-  p.volume(id, GRUB, { flat: 0.85, pattern: (x, y) => (Math.abs(Math.hypot(x - 9, y - 9) - 4) < 0.7 ? -2 : 0) });
-  p.circle(12, 7, 1.6, rgb('#f8f8e8')); p.set(12, 7, OUTLINE);
+  p.circle(10, 10, 6.5, CHITIN[3], id);
+  p.volume(id, CHITIN.slice(0, 6), { flat: 0.85, pattern: (x, y) => (Math.abs(Math.hypot(x - 10, y - 10) - 3.5) < 0.6 ? -2 : 0) });
+  p.set(12, 8, ICHOR[4]); p.set(13, 8, ICHOR[3]);
   p.outline(OUTLINE);
-  return frame(p, 9, 9);
+  return frame(p, 10, 10);
 }
 
+/** A spray of glowing ichor. */
 function splat(k: number): Frame {
   const S = 34, c = S / 2;
   const p = new Pix(S, S);
@@ -389,10 +388,10 @@ function splat(k: number): Frame {
   const r = 4 + k * 3;
   for (let i = 0; i < 10; i++) {
     const a = rng.range(0, Math.PI * 2), d = rng.range(0.3, 1) * r, s = rng.range(1.5, 3.5) * (1 - k * 0.18);
-    const col = i % 3 === 0 ? C.slime[2] : i % 3 === 1 ? GRUB[2] : GRUB[4];
+    const col = i % 3 === 0 ? ICHOR[3] : i % 3 === 1 ? ICHOR[2] : CHITIN[4];
     if (s > 0.5) p.circle(c + Math.cos(a) * d, c + Math.sin(a) * d, s, col);
   }
-  if (k < 2) p.circle(c, c, 5 - k * 2, C.slime[3]);
+  if (k < 2) p.circle(c, c, 5 - k * 2, ICHOR[4]);
   return frame(p, c, c);
 }
 
@@ -422,146 +421,167 @@ function pustule(k: number): Frame {
 function egg(k: number): Frame {
   const p = new Pix(16, 18);
   const id = p.newPart();
-  p.ellipse(8, 9 + k * 0.5, 6, 7.5 - k * 0.5, rgb('#c8c890'), id);
-  p.volume(id, [rgb('#3a4020'), rgb('#6a7040'), rgb('#9aa060'), rgb('#c8c890'), rgb('#eef0c0')], { flat: 0.8 });
-  for (let y = 4; y < 15; y++) p.over(5 + Math.sin(y / 2) * 1, y, rgb('#7a6a3a'));
-  // a shadow squirming inside
-  p.over(9, 9 + k, rgb('#6a6a3a')); p.over(10, 10 + k, rgb('#6a6a3a'));
+  p.ellipse(8, 9 + k * 0.5, 6, 7.5 - k * 0.5, CHITIN[4], id);
+  p.volume(id, CHITIN.slice(1), { flat: 0.8 });
+  // glowing seams, brighter as it gets ready to split
+  for (let y = 3; y < 15; y++) p.over(8 + Math.sin(y / 2) * 0.8, y, k ? ICHOR[3] : ICHOR[1]);
+  p.over(5, 8, ICHOR[1]); p.over(11, 10, ICHOR[1]);
   p.outline(OUTLINE);
   return frame(p, 8, 9);
 }
 
-/** Green gas, dithered so the hive shows through. */
-function gas(k: number): Frame {
-  const W = 52, H = 38;
+/** A tongue of green plasma: the shockwave the Queen drives along the floor. */
+function plasma(k: number): Frame {
+  const W = 44, H = 40;
   const p = new Pix(W, H);
   const rng = new RNG(60 + k);
-  const puffs: [number, number, number][] = [];
-  for (let i = 0; i < 7; i++) puffs.push([rng.range(12, W - 12), rng.range(14, H - 10), rng.range(8, 13)]);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    let best = 9;
-    for (const [px, py, r] of puffs) best = Math.min(best, Math.hypot(x - px, y - py) / r);
-    if (best > 1) continue;
-    const edge = best > 0.82;
-    if (edge && dth(x + k, y) > 0.5) continue;
-    const shade = (y / H) + (best * 0.4);
-    const c = shade < 0.45 ? rgb('#d8f878') : shade < 0.75 ? rgb('#9ad040') : rgb('#5a9a28');
-    p.set(x, y, withAlpha(c, edge ? 0.55 : 0.85));
+  for (let x = 0; x < W; x++) {
+    const e = 1 - Math.abs(x - W / 2) / (W / 2);
+    const h = Math.max(0, e * 30 + Math.sin(x / 3 + k * 2) * 5 + rng.range(-3, 3) + 4);
+    for (let y = 0; y < h; y++) {
+      const t = y / Math.max(1, h);
+      const c = t < 0.3 ? rgb('#ffffff') : t < 0.55 ? ICHOR[4] : t < 0.8 ? ICHOR[3] : ICHOR[2];
+      if (t > 0.85 && dth(x + k, y) > 0.5) continue;
+      p.set(x, H - 1 - y, c);
+    }
   }
   return frame(p, W / 2, H);
 }
 
-// ---------------------------------------------------------------- the Hive Mother
+// ---------------------------------------------------------------- the Hive Queen
 
-/**
- * One half of the Mother's colossal abdomen, seen from behind. The two halves sit
- * side by side. Insects have abdomens. That is all this is.
- */
-function lobe(): Frame {
-  const W = 104, H = 104, r = 49;
+/** Her swollen egg sac, trailing out behind her: ribbed plates over a glowing belly. */
+function abdomen(): Frame {
+  const W = 170, H = 96;
   const p = new Pix(W, H);
   const cx = W / 2, cy = H / 2;
   const id = p.newPart();
-  p.circle(cx, cy, r, CHITIN[3], id);
-  // banded chitin plates curving around it like a wasp's
-  p.volume(id, CHITIN, {
-    flat: 0.95,
-    pattern: (x, y) => {
-      const dy = y - cy + Math.pow(Math.abs(x - cx) / r, 2) * 10;
-      const band = ((dy + 200) % 22);
-      return band < 2.5 ? -3 : band < 4 ? -1 : 0;
-    },
-  });
-  // a big wet sheen
-  for (let i = 0; i < 18; i++) for (let j = 0; j < 3; j++) p.over(cx - 26 + i + j, cy - 30 + Math.round(Math.pow((i - 9) / 9, 2) * 6) + j, j === 1 ? CHITIN[6] : CHITIN[5]);
-  p.over(cx - 30, cy - 18, CHITIN[6]); p.over(cx - 31, cy - 15, CHITIN[5]);
-  p.outline(OUTLINE);
-  return frame(p, cx, cy);
-}
-
-/** 0 clenched, 1 straining, 2 wide open. */
-function vent(k: number): Frame {
-  const W = 40, H = 34;
-  const p = new Pix(W, H);
-  const cx = W / 2, cy = H / 2;
-  const rx = 10 + k * 3, ry = 8 + k * 2.5;
-  const ring = p.newPart();
-  p.ellipse(cx, cy, rx, ry, PUCKER[3], ring);
-  p.volume(ring, k === 1 ? [PUCKER[2], PUCKER[3], PUCKER[4], PUCKER[5], rgb('#ffd8c8')] : [PUCKER[1], PUCKER[2], PUCKER[3], PUCKER[4], PUCKER[5]], { flat: 0.55 });
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    for (let r = k === 2 ? 0.55 : 0.1; r < 1; r += 0.08) p.over(cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r, PUCKER[1]);
+  p.ellipse(cx, cy, 82, 44, CHITIN[3], id);
+  p.volume(id, CHITIN, { flat: 0.95, pattern: (x) => ((x + 200) % 16 < 2 ? -3 : 0) });
+  // the translucent underside, eggs glowing within
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = (x - cx) / 76, dy = (y - cy - 10) / 30;
+    if (dx * dx + dy * dy < 1 && y > cy + 4 && p.get(x, y) !== 0) {
+      // eggs packed in unevenly, glowing through the membrane
+      const row = Math.floor((y + 2) / 12), cx2 = (x + 4 + (row & 1) * 7 + Math.floor(hash(row, 0, 501) * 6)) % 14;
+      const r = 3 + hash(Math.floor((x + 4 + (row & 1) * 7) / 14), row, 502) * 2;
+      const d = Math.hypot(cx2 - 7, ((y + 2) % 12) - 6);
+      const glow = 0.5 + 0.5 * vnoise(x / 18, y / 10, 503);
+      p.set(x, y, d < r ? (d < r * 0.5 ? ICHOR[3] : glow > 0.5 ? ICHOR[2] : ICHOR[1]) : d < r + 1 ? ICHOR[0] : mix(ICHOR[0], CHITIN[2], 0.6));
+    }
   }
-  if (k === 2) {
-    p.ellipse(cx, cy, rx * 0.5, ry * 0.5, PUCKER[0]);
-    p.ellipse(cx, cy + 1, rx * 0.32, ry * 0.32, rgb('#060102'));
-    // glowing green deep inside, and drool
-    p.set(cx, cy + 1, GLOW[1]); p.set(cx - 1, cy + 1, GLOW[0]);
-    for (let y = 0; y < 6; y++) p.set(cx + 2, cy + ry * 0.5 + y, y > 3 ? C.slime[3] : C.slime[2]);
-  } else {
-    p.set(cx, cy, PUCKER[0]); p.set(cx - 1, cy, PUCKER[1]); p.set(cx + 1, cy, PUCKER[1]);
-    if (k === 1) { p.ellipse(cx, cy, 2.5, 1.5, GLOW[0]); p.set(cx, cy - 1, GLOW[1]); }
+  // spines down the top
+  for (let i = 0; i < 8; i++) {
+    const x = 26 + i * 16, y = cy - 42 + Math.pow((x - cx) / 82, 2) * 28;
+    p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, s) => p.poly([[x - 3, y + 4], [x + 3, y + 4], [x + 4, y - 7]], c, s));
   }
   p.outline(OUTLINE);
   return frame(p, cx, cy);
 }
 
-function thorax(): Frame {
-  const W = 92, H = 52;
-  const p = new Pix(W, H);
-  const id = p.newPart();
-  p.ellipse(W / 2, 30, 40, 20, CHITIN[3], id);
-  p.volume(id, CHITIN, { flat: 0.9, pattern: (x) => (Math.abs(x - W / 2) < 1 ? -2 : 0) });
-  // a ridge of spines
-  for (let i = -3; i <= 3; i++) {
-    const x = W / 2 + i * 10, base = 14 + Math.abs(i) * 2;
-    p.shape(ramp('#2a1a10', '#8a7458', '#eee0c0'), (c, s) => p.poly([[x - 3, base + 2], [x + 3, base + 2], [x + i * 1.5, base - 10 + Math.abs(i)]], c, s));
-  }
-  p.outline(OUTLINE);
-  return frame(p, W / 2, 30);
-}
-
-/** Looking back over her shoulder at you. k: 0 idle, 1 screeching. */
-function head(k: number): Frame {
-  const W = 64, H = 56;
+/** The armored thorax, with an opening at its heart where the core sits. */
+function torso(): Frame {
+  const W = 96, H = 104;
   const p = new Pix(W, H);
   const cx = W / 2;
-  // crest
-  for (let i = -2; i <= 2; i++) p.shape([CHITIN[1], CHITIN[3], CHITIN[5]], (c, s) => p.poly([[cx + i * 7 - 4, 16], [cx + i * 7 + 4, 16], [cx + i * 9, 2 + Math.abs(i) * 3]], c, s));
-  const skull = p.newPart();
-  p.ellipse(cx, 24, 22, 15, CHITIN[3], skull);
-  p.ellipse(cx, 34, 15, 10, CHITIN[3], skull);
-  p.volume(skull, CHITIN, { flat: 0.85 });
-  // mandibles, wider apart when screeching
-  const sp = k ? 7 : 2;
-  for (const side of [-1, 1]) {
-    p.shape(ramp('#2a1a10', '#8a7458', '#eee0c0'), (c, s) => p.poly([[cx + side * 7, 38], [cx + side * 13, 38], [cx + side * (6 + sp), 52], [cx + side * (3 + sp * 0.6), 50]], c, s));
+  const id = p.newPart();
+  p.poly([[cx - 26, 6], [cx + 26, 6], [cx + 42, 40], [cx + 34, 84], [cx + 16, H - 2], [cx - 16, H - 2], [cx - 34, 84], [cx - 42, 40]], CHITIN[3], id);
+  p.volume(id, CHITIN, { flat: 0.9, pattern: (x, y) => ((y + 100) % 13 < 2 && Math.abs(x - cx) > 14 ? -2 : Math.abs(x - cx) < 1 && y < 40 ? -2 : 0) });
+  // shoulder spikes and a ridged spine down the middle
+  for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const bx = cx + side * (22 + i * 7), by = 10 + i * 6;
+    p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, s) => p.poly([[bx - 3, by + 4], [bx + 3, by + 4], [bx + side * (6 + i * 3), by - 12 + i * 2]], c, s));
   }
-  if (k) {
-    // the maw between them, glowing green, with strings of drool
-    p.ellipse(cx, 44, 6, 7, rgb('#1a0408'));
-    p.ellipse(cx, 45, 3, 4, GLOW[1]);
-    p.line(cx - 4, 40, cx - 3, 52, C.slime[2]); p.line(cx + 3, 40, cx + 4, 50, C.slime[2]);
-  }
-  // big glowing compound eyes
-  for (const side of [-1, 1]) {
-    const id = p.newPart();
-    p.ellipse(cx + side * 12, 24, 7, 5, GLOW[1], id);
-    p.volume(id, [rgb('#1a4a0a'), GLOW[0], GLOW[1], GLOW[2], rgb('#ffffff')], { flat: 0.7, pattern: (x, y) => ((x + y) % 3 === 0 ? -1 : 0) });
-    // the slant makes her look cross
-    for (let i = 0; i < 9; i++) p.set(cx + side * (6 + i), 18 + Math.round(i * 0.35), CHITIN[0]);
+  for (let y = 10; y < 40; y += 5) p.over(cx, y, CHITIN[5]);
+  // the socket around the core
+  p.ellipse(cx, 62, 19, 21, CHITIN[0]);
+  p.ellipse(cx, 62, 16, 18, ICHOR[0]);
+  // rib plates curving around it
+  for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
+    const y = 46 + i * 10;
+    p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, s) => p.line(cx + side * 20, y, cx + side * 36, y + 6, c, 3, s));
   }
   p.outline(OUTLINE);
-  return frame(p, cx, 30);
+  return frame(p, cx, H / 2);
 }
 
-/** Jointed insect leg, drawn pointing right from the hip at (0, 5). */
+/** The core: 0 sealed under armor plates, 1 seams glowing, 2 laid open and pulsing. */
+function core(k: number): Frame {
+  const W = 36, H = 40;
+  const p = new Pix(W, H);
+  const cx = W / 2, cy = H / 2;
+  if (k === 2) {
+    const id = p.newPart();
+    p.ellipse(cx, cy, 13, 15, ICHOR[3], id);
+    p.volume(id, [ICHOR[0], ICHOR[1], ICHOR[2], ICHOR[3], ICHOR[4], rgb('#ffffff')], { flat: 0.6 });
+    for (let i = 0; i < 6; i++) { const a = i; for (let r = 4; r < 13; r++) p.over(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 1.1 + Math.sin(r) * 0.8, ICHOR[1]); }
+    p.circle(cx - 3, cy - 5, 2, rgb('#ffffff'));
+  } else {
+    // four armor plates locked over it
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, s) => p.poly([[cx + sx, cy + sy], [cx + sx * 14, cy + sy * 2], [cx + sx * 12, cy + sy * 13], [cx + sx * 2, cy + sy * 16]], c, s), 2);
+    }
+    const seam = k === 1 ? ICHOR[4] : ICHOR[1];
+    for (let i = -14; i <= 14; i++) { p.over(cx, cy + i, seam); p.over(cx + i * 0.9, cy, seam); }
+    if (k === 1) p.circle(cx, cy, 2, ICHOR[4]);
+  }
+  p.outline(OUTLINE);
+  return frame(p, cx, cy);
+}
+
+/** Her head in profile, facing left: a long crested skull. k: 0 idle, 1 shrieking. */
+function head(k: number): Frame {
+  const W = 86, H = 60;
+  const p = new Pix(W, H);
+  // crest of swept-back spines
+  for (let i = 0; i < 6; i++) {
+    const bx = 40 + i * 6, by = 18 + i * 1.5;
+    p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, s) => p.poly([[bx - 4, by + 4], [bx + 4, by + 4], [bx + 14 + i * 3, by - 14 + i * 2]], c, s));
+  }
+  // the long smooth skull, pointing left
+  const sk = p.newPart();
+  p.ellipse(46, 26, 28, 12, CHITIN[3], sk);
+  p.poly([[22, 20], [6, 30], [22, 34]], CHITIN[3], sk);
+  p.ellipse(70, 30, 12, 14, CHITIN[3], sk);
+  p.volume(sk, CHITIN, { flat: 0.85, pattern: (x, y) => (Math.abs(y - 26 - (x - 46) * 0.05) < 0.6 && x > 30 ? -2 : 0) });
+  // lower jaw, dropping open to shriek
+  const drop = k ? 9 : 2;
+  p.shape([CHITIN[1], CHITIN[3], CHITIN[5]], (c, s) => p.poly([[14, 34 + drop * 0.3], [50, 34], [58, 40], [22, 40 + drop]], c, s));
+  // teeth
+  for (let i = 0; i < 6; i++) { p.set(14 + i * 5, 33, rgb('#e8e8e0')); p.set(18 + i * 5, 37 + drop * (1 - i / 7), rgb('#c8c8c0')); }
+  if (k) {
+    // the inner mouth, glowing, pushing forward
+    p.ellipse(26, 37, 9, 3 + drop * 0.25, rgb('#020604'));
+    p.shape([ICHOR[1], ICHOR[2], ICHOR[4]], (c, s) => { p.line(34, 37, 12, 37, c, 3, s); p.circle(12, 37, 2.5, c, s); });
+  }
+  // eye slits, burning green
+  for (let i = 0; i < 7; i++) p.set(28 + i, 23 + Math.round(i * 0.3), i < 5 ? ICHOR[4] : ICHOR[2]);
+  p.set(29, 22, ICHOR[3]);
+  p.outline(OUTLINE);
+  return frame(p, 70, 34);
+}
+
+/** A scythe forelimb hanging from the shoulder at the anchor, blade toward the floor. */
+function arm(): Frame {
+  const W = 40, H = 92;
+  const p = new Pix(W, H);
+  p.shape([CHITIN[1], CHITIN[3], CHITIN[5]], (c, s) => { p.line(20, 4, 26, 42, c, 8, s); p.circle(20, 5, 5, c, s); }, 2);
+  p.shape([CHITIN[1], CHITIN[3], CHITIN[5]], (c, s) => { p.line(26, 42, 16, 62, c, 6, s); p.circle(26, 42, 4.5, c, s); }, 2);
+  // the blade: a long hooked edge
+  const B: Ramp = ramp('#1a2a30', '#7aa4b0', '#e8fbff');
+  p.shape(B, (c, s) => p.poly([[13, 58], [20, 60], [12, 82], [2, 90], [6, 78]], c, s), 2);
+  for (let y = 62; y < 86; y++) p.over(12 - (y - 62) * 0.35, y, rgb('#ffffff'));
+  p.outline(OUTLINE);
+  return frame(p, 20, 5);
+}
+
+/** Jointed insect leg, drawn pointing right from the hip at (3, 8). */
 function leg(): Frame {
   const W = 62, H = 30;
   const p = new Pix(W, H);
-  p.shape([CHITIN[1], CHITIN[2], CHITIN[4]], (c, s) => { p.line(3, 8, 32, 4, c, 6, s); }, 2);
-  p.shape([CHITIN[1], CHITIN[2], CHITIN[4]], (c, s) => { p.line(32, 4, 54, 24, c, 4, s); p.circle(32, 4, 3.5, c, s); }, 2);
-  p.shape(ramp('#2a1a10', '#8a7458', '#eee0c0'), (c, s) => p.poly([[52, 22], [57, 23], [60, 29]], c, s));
+  p.shape([CHITIN[1], CHITIN[3], CHITIN[5]], (c, s) => { p.line(3, 8, 32, 4, c, 6, s); }, 2);
+  p.shape([CHITIN[1], CHITIN[3], CHITIN[5]], (c, s) => { p.line(32, 4, 54, 24, c, 4, s); p.circle(32, 4, 3.5, c, s); }, 2);
+  p.shape([CHITIN[2], CHITIN[4], CHITIN[6]], (c, s) => p.poly([[52, 22], [57, 23], [60, 29]], c, s));
   p.outline(OUTLINE);
   return frame(p, 3, 8);
 }
@@ -572,11 +592,11 @@ export function buildHive(): HiveArt {
   cache = {
     sky: skyCanvas(), far: farCanvas(), near: nearCanvas(),
     pod: [pod(0), pod(1)], tendril: tendril(), eggCluster: eggCluster(), bones: bones(),
-    orifice: [0, 1, 2, 3].map(orifice),
-    grub: [grub(0), grub(1)], grubCurl: grubCurl(), splat: [0, 1, 2, 3].map(splat),
+    broodPod: [0, 1, 2, 3].map(broodPod),
+    hatchling: [hatchling(0), hatchling(1)], hatchlingCurl: hatchlingCurl(), splat: [0, 1, 2, 3].map(splat),
     pustule: [0, 1, 2, 3].map(pustule),
-    egg: [egg(0), egg(1)], gas: [gas(0), gas(1), gas(2)],
-    lobe: lobe(), vent: [vent(0), vent(1), vent(2)], thorax: thorax(), head: [head(0), head(1)], leg: leg(),
+    egg: [egg(0), egg(1)], plasma: [plasma(0), plasma(1), plasma(2)],
+    abdomen: abdomen(), torso: torso(), core: [core(0), core(1), core(2)], head: [head(0), head(1)], arm: arm(), leg: leg(),
   };
   return cache;
 }
