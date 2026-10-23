@@ -327,7 +327,7 @@ export class Drone extends Enemy {
     else if (Math.abs(this.vx) < 1) this.vx = Math.sign(px - this.x) * 1.1;
     if (--this.fireT <= 0 && this.onScreen(-10) && g.player.alive) {
       shoot(g, this.x, this.y + 8, this.angleToPlayer(this.x, this.y + 8), 2);
-      this.fireT = 90 + Math.random() * 40;
+      this.fireT = (this.carried ? 170 : 90) + Math.random() * 40;
     }
     this.baseUpdate();
     const s = this.sprite;

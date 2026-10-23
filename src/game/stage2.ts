@@ -2,12 +2,10 @@ import * as THREE from 'three';
 import { Parallax, VW, VH, type Sprite } from '../engine/gfx';
 import type { Frame } from '../engine/pixel';
 import { T, TS } from '../art/tiles';
-import { TOWER_TOP } from '../art/desert';
 import type { Game } from './game';
 import type { Stage, Deck } from './stage';
 import type { Hittable } from './weapons';
 import { World } from './world';
-import { Rifleman } from './enemies';
 import type { Spawn, Scenery } from './level';
 import { Jeep, Biker, Gunship } from './vehicles';
 import { SandWorm, Burrower, WormCameo } from './worm';
@@ -22,14 +20,14 @@ export const GROUND = 28;
 const FLOOR = GROUND * TS;
 const CAM_Y = 270;                  // ground line sits low on screen: lots of sky
 const SPEED = 3.5;                  // jeep speed, px per frame
-const JEEP_SX = 112;                // jeep's place on screen while it drives
+const JEEP_SX = 112;                // jeep's starting place on screen
+const JEEP_MIN = 50, JEEP_MAX = 280; // how far you can push the driver forward or back
 const HELI_CAM = 3840;
 const CRASH_CAM = 7680;
 const CP1_CAM = 7880;               // where the view comes to rest after the crash
 const ARENA_X = 690 * TS;
 const WORM_HOME = ARENA_X + VW / 2;
 const PITS: [number, number][] = [[541, 544], [576, 578], [613, 616]];
-const TOWERS = [1800, 2900, 3500];
 
 type State = 'ride' | 'crash' | 'foot' | 'boss';
 
@@ -48,6 +46,8 @@ export class Stage2 implements Stage {
   eruptX = 0;
   crashed = false;
   lockT = 0;
+  /** Where the jeep sits on screen. Leaning on either end of the bed nudges the driver to speed up or ease off. */
+  jeepSX = JEEP_SX;
 
   constructor(public g: Game) {}
 
@@ -57,6 +57,7 @@ export class Stage2 implements Stage {
   // ---------------------------------------------------------------- building
   build(cp: number) {
     const g = this.g;
+    this.jeepSX = JEEP_SX;
     this.heli = null; this.heliDone = cp > 0; this.cameo = null; this.worm = null; this.crashed = cp > 0; this.lockT = 0;
     g.world = buildWorld();
     g.world.build(g.gfx);
@@ -95,7 +96,8 @@ export class Stage2 implements Stage {
         if (!this.heli && !this.heliDone && gx.camX >= HELI_CAM) this.heli = new Gunship(g, FLOOR);
         if (gx.camX >= CRASH_CAM) {
           this.state = 'crash';
-          this.eruptX = gx.camX + 300;
+          // just ahead of the jeep, wherever the player has steered it
+          this.eruptX = gx.camX + Math.min(340, this.jeepSX + 190);
           const h = this.heli && this.heli.alive ? this.heli : null;
           this.cameo = new WormCameo(g, this.eruptX, FLOOR, h);
           g.texts.push({ text: '!!', x: this.eruptX, y: FLOOR - 30, t: 0 });
@@ -103,9 +105,11 @@ export class Stage2 implements Stage {
         break;
       case 'crash': {
         const j = this.jeep!;
-        if (!this.crashed && j.x + 40 >= this.eruptX - 16) {
+        if (!this.crashed && (this.cameo?.t ?? 99) >= 22 && j.x + 40 >= this.eruptX - 16) {
           this.crashed = true;
           j.crash();
+          // any bikers still riding along peel off ahead
+          for (const e of g.enemies) if (e instanceof Biker) e.phase = 'leave';
           // launched out of the bed
           const p = g.player;
           if (p.alive) { p.body.vy = -6.5; p.curl = true; p.jumpHeld = false; p.invuln = Math.max(p.invuln, 100); }
@@ -145,7 +149,17 @@ export class Stage2 implements Stage {
     const g = this.g;
     const j = this.jeep;
     if (j) {
-      if (j.state === 'drive') j.x = g.gfx.camX + JEEP_SX;
+      if (j.state === 'drive') {
+        const p = g.player, d = this.deck(), inp = g.input;
+        if (this.state === 'ride' && p.alive && d && !inp.held('lock')) {
+          if (inp.held('right') && p.body.x >= d.x1 - 0.5) this.jeepSX = Math.min(JEEP_MAX, this.jeepSX + 1.5);
+          if (inp.held('left') && p.body.x <= d.x0 + 0.5) this.jeepSX = Math.max(JEEP_MIN, this.jeepSX - 1.5);
+        }
+        const nx = g.gfx.camX + this.jeepSX;
+        // the player rides along with the jeep's shift
+        if (p.alive && d && p.state === 'play') p.body.x += nx - j.x - g.scrollVx;
+        j.x = nx;
+      }
       j.update();
     }
     if (this.heli) {
@@ -174,12 +188,6 @@ export class Stage2 implements Stage {
     const g = this.g;
     switch (s.kind) {
       case 'biker': g.enemies.push(new Biker(g, s.arg < 0, FLOOR)); return true;
-      case 'tower': {
-        const r = new Rifleman(g, s.x, FLOOR - TOWER_TOP, s.arg === 'sniper');
-        r.touch = false;
-        g.enemies.push(r);
-        return true;
-      }
       case 'burrower': g.enemies.push(new Burrower(g, s.x, s.y)); return true;
     }
     return false;
@@ -245,15 +253,11 @@ function buildSpawns(): Spawn[] {
   const s: Spawn[] = [
     { kind: 'biker', x: cam(600), y: FLOOR, arg: -1 },
     { kind: 'drone', x: cam(1000), y: FLOOR - 70, arg: -1 },
-    { kind: 'drone', x: cam(1070), y: FLOOR - 50, arg: -1 },
     { kind: 'biker', x: cam(1500), y: FLOOR, arg: 1 },
     { kind: 'capsule', x: cam(1800), y: FLOOR - 110, arg: 'S' },
     { kind: 'biker', x: cam(2100), y: FLOOR, arg: -1 },
-    { kind: 'biker', x: cam(2200), y: FLOOR, arg: -1 },
     { kind: 'drone', x: cam(2700), y: FLOOR - 70, arg: -1 },
-    { kind: 'drone', x: cam(2760), y: FLOOR - 40, arg: -1 },
     { kind: 'biker', x: cam(3100), y: FLOOR, arg: 1 },
-    { kind: 'biker', x: cam(3160), y: FLOOR, arg: -1 },
     { kind: 'capsule', x: cam(3400), y: FLOOR - 120, arg: 'M' },
     // while the gunship is up
     { kind: 'biker', x: cam(4700), y: FLOOR, arg: -1 },
@@ -286,7 +290,6 @@ function buildSpawns(): Spawn[] {
     { kind: 'drone', x: px(680), y: py(GROUND - 6), arg: -1 },
     { kind: 'burrower', x: px(684), y: FLOOR },
   ];
-  for (const tx of TOWERS) s.push({ kind: 'tower', x: tx, y: FLOOR, arg: tx === 2900 ? 'sniper' : '' });
   return s;
 }
 
@@ -376,7 +379,6 @@ function buildDecor(g: Game): Sprite[] {
   put(a.ribs, 2400, gy + 4, 10, false, 0.85);
   put(a.ribs, 6100, gy + 4, 10, true, 0.85);
   for (const x of [900, 3000, 5600, 7400]) put(a.sign, x, gy, 13);
-  for (const x of TOWERS) put(a.tower, x, gy, 15);
   // big foreground cacti at the bottom edge sell the speed of the ride
   for (let x = 300; x < 8200; x += 420 + ((x * 7) % 260)) put(a.cactus[(x >> 5) % 3], x, FLOOR + 74, 55, (x >> 6) % 2 === 0, 0.35);
   // on foot

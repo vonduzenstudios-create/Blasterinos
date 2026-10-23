@@ -51,6 +51,8 @@ Hold down while standing to go prone.
 - **Boss:** a hydra whose body rises from the lake in the background. Destroy its three
   heads, then its exposed core while its claws slam the ledge from the foreground.
 - **Stage 2:** on the jeep you can shuffle along the bed, jump and duck while you shoot.
+  Lean on the front or back of the bed and the driver speeds up or eases off, so you can
+  steer the jeep around the screen to dodge or catch falling power-ups.
   The gunship sweeps over to bomb the jeep. The Dune Worm only takes real damage when its
   head peels open, either to spit sand or after it bursts up under you (watch for the
   shaking mound). It also sends baby worms through the sand.
