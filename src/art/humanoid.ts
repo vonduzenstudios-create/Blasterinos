@@ -16,6 +16,7 @@ export interface Look {
   gun: Ramp;
   bulk: number;   // 0 = lean, 1 = heavy
   armor?: Ramp;   // shoulder pads
+  plate?: boolean; // full heavy armor: chest plate, big pauldrons, thigh guards, visored helm
   bareArms?: boolean;
 }
 
@@ -48,6 +49,21 @@ export const LOOKS: Record<string, Look> = {
     boots: ramp('#141418', '#2a2a32', '#44444e'),
     gun: ramp('#22232c', '#4a4c5a', '#8a8ea0'),
     armor: ramp('#3a3a48', '#62627a', '#9a9ab4'),
+    plate: true,
+    bulk: 1,
+  },
+  // Voss once his armor has been knocked off: fatigues, webbing and a soft cap
+  vossBare: {
+    skin: ramp('#7a4a32', '#b07050', '#d89a72'),
+    hair: ramp('#1a1a1a', '#2a2a2a', '#3a3a3a'),
+    head: 'beret',
+    headColor: ramp('#1e2a1e', '#344634', '#4e664a'),
+    accent: ramp('#0a6a7a', '#20c8e0', '#a0f8ff'),
+    torso: ramp('#2a3a2a', '#4a6248', '#74906a'),
+    vest: ramp('#26301e', '#3a4630', '#56624a'),
+    pants: ramp('#22261e', '#3c4434', '#5a644c'),
+    boots: ramp('#141418', '#2a2a32', '#44444e'),
+    gun: ramp('#22232c', '#4a4c5a', '#8a8ea0'),
     bulk: 1,
   },
   soldier: {
@@ -129,6 +145,13 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
       const ta = R(shinDeg - 90);
       p.line(fx, fy, fx - Math.sin(ta) * 3, fy + Math.cos(ta) * 0.8, c, 2.4, id);
     });
+    if (look.plate && look.armor) {
+      const ar = back ? darker(look.armor) : look.armor;
+      p.shape(ar, (c, id) => {
+        p.line(hx + dx + Math.sin(R(thighDeg)) * 1.5, hy + 1, hx + dx + Math.sin(R(thighDeg)) * 5, hy + Math.cos(R(thighDeg)) * 5, c, legW + 1, id);
+        p.circle(kx + Math.sin(R(thighDeg)) * 0.5 + 0.5, ky, 1.8, c, id);
+      }, 2);
+    }
   };
 
   // back arm (behind body) when holding gun two-handed
@@ -172,7 +195,14 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
   // vest straps / pouches
   p.over(hx + 1, hy - 4, look.vest[2]);
   p.over(hx - 1, hy - 5, look.vest[0]);
-  if (look.armor) {
+  if (look.plate && look.armor) {
+    // chest plate over the vest, with a glowing core light
+    p.shape(look.armor, (c, id) => p.line(hx + Math.sin(lean) * 3, hy - 4, neckX - Math.sin(lean), neckY + 3, c, tw + 1, id), 2);
+    const mx = (hx + neckX) / 2 + 1, my = (hy + neckY) / 2 - 1;
+    p.set(mx, my, look.accent[2]); p.set(mx, my + 1, look.accent[1]);
+    p.over(hx - 2, hy - 3, look.armor[0]); p.over(hx + 2, hy - 3, look.armor[0]);
+    p.shape(look.armor, (c, id) => p.ellipse(neckX - 0.5, neckY + 1.5, 5, 3.5, c, id), 2);
+  } else if (look.armor) {
     p.shape(look.armor, (c, id) => p.ellipse(neckX, neckY + 2, 3.5, 2.5, c, id), 2);
   }
 
@@ -189,6 +219,12 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
       p.line(hdx - 4, hdy - 1, hdx - 8, hdy - 1 + Math.round(Math.sin(ft) * 1.5), c, 2, id);
       p.line(hdx - 7, hdy, hdx - 10, hdy + 1 + Math.round(Math.cos(ft) * 1.5), c, 1, id);
     });
+  } else if (look.head === 'helmet' && look.plate && look.armor) {
+    // heavy visored helm: wider shell, ridge on top, cheek guard, full-width visor slit
+    p.shape(look.armor, (c, id) => { p.ellipse(hdx - 0.5, hdy - 1.5, 5, 3.8, c, id); p.rect(hdx - 5, hdy - 1, 3, 4, c, id); p.rect(hdx + 1, hdy + 1, 4, 2, c, id); }, 2);
+    p.shape(look.headColor, (c, id) => p.line(hdx - 4, hdy - 5, hdx + 2, hdy - 5, c, 2, id));
+    p.shape(look.accent, (c, id) => p.rect(hdx, hdy, 5, 1, c, id));
+    p.set(hdx + 4, hdy, look.accent[2]);
   } else if (look.head === 'helmet') {
     p.shape(look.headColor, (c, id) => { p.ellipse(hdx - 0.5, hdy - 1.5, 4.5, 3.2, c, id); p.rect(hdx - 5, hdy - 1, 2, 3, c, id); }, 2);
     p.shape(look.accent, (c, id) => p.rect(hdx + 1, hdy, 3, 1, c, id));
@@ -200,7 +236,7 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
     p.shape(look.accent, (c, id) => p.rect(hdx + 1, hdy - 1, 3, 1, c, id));
   }
   if (look.head !== 'mask' && look.head !== 'helmet') p.set(hdx + 2, hdy, OUTLINE); // eye
-  if (look.head === 'helmet') p.set(hdx + 2, hdy + 1, look.skin[0]);
+  if (look.head === 'helmet' && !look.plate) p.set(hdx + 2, hdy + 1, look.skin[0]);
 
   // gun + front arm
   if (pose.arms === 'up') {
@@ -225,7 +261,7 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
     // front arm: shoulder -> grip
     p.shape(armRamp, (c, id) => { p.line(neckX + 1, neckY + 1, gripX - 1, gripY + 2, c, 3, id); p.line(gripX - 1, gripY + 2, gripX, gripY, c, 3, id); });
     p.shape(look.skin, (c, id) => p.circle(gripX, gripY, 1.2, c, id));
-    if (look.armor) p.shape(look.armor, (c, id) => p.ellipse(neckX + 1, neckY + 1, 2.5, 2, c, id), 2);
+    if (look.armor) p.shape(look.armor, (c, id) => look.plate ? p.ellipse(neckX + 1, neckY + 1, 4, 3, c, id) : p.ellipse(neckX + 1, neckY + 1, 2.5, 2, c, id), 2);
   }
   p.outline(OUTLINE);
   return p;
@@ -248,6 +284,7 @@ function drawCurl(look: Look): Pix {
   p.shape(look.pants, (col, id) => { p.circle(c + 2, c + 3, 5, col, id); });
   p.shape(look.boots, (col, id) => { p.circle(c + 6, c + 6, 2.5, col, id); p.circle(c - 1, c + 7, 2.2, col, id); });
   p.shape(look.vest, (col, id) => p.circle(c - 2, c - 1, 5, col, id), 1);
+  if (look.plate && look.armor) p.shape(look.armor, (col, id) => { p.circle(c - 3, c - 1, 5.5, col, id); p.ellipse(c - 1, c - 5, 3.5, 2.5, col, id); }, 2);
   p.shape(look.bareArms ? look.skin : look.torso, (col, id) => p.line(c - 4, c + 2, c + 3, c + 1, col, 3, id));
   p.shape(look.gun, (col, id) => p.line(c - 6, c + 4, c + 5, c - 2, col, 2, id));
   p.shape(look.skin, (col, id) => p.circle(c + 1, c - 6, 3.4, col, id));
@@ -255,8 +292,10 @@ function drawCurl(look: Look): Pix {
     p.shape(look.hair, (col, id) => p.ellipse(c - 1, c - 7, 3, 2, col, id));
     p.shape(look.headColor, (col, id) => p.line(c - 2, c - 7, c + 4, c - 7, col, 2, id));
     p.shape(look.accent, (col, id) => p.line(c - 3, c - 7, c - 7, c - 9, col, 2, id));
+  } else if (look.head === 'beret') {
+    p.shape(look.headColor, (col, id) => p.ellipse(c, c - 8, 3.6, 2, col, id));
   } else {
-    p.shape(look.headColor, (col, id) => p.ellipse(c + 0.5, c - 7, 4, 3, col, id), 2);
+    p.shape(look.plate && look.armor ? look.armor : look.headColor, (col, id) => p.ellipse(c + 0.5, c - 7, 4, 3, col, id), 2);
     p.shape(look.accent, (col, id) => p.rect(c + 2, c - 6, 3, 1, col, id));
   }
   p.outline(OUTLINE);
@@ -276,6 +315,8 @@ export interface HeroFrames {
   hangMove: Frame[];
   hurt: Frame;
   dead: Frame;
+  /** Pieces of plate that fly off when the armor is knocked away (empty without plate armor). */
+  bits: Frame[];
 }
 
 export const AIMS: Record<string, number> = { f: 0, uf: -45, u: -90, df: 45, d: 90 };
@@ -322,7 +363,25 @@ export function buildHero(look: Look): HeroFrames {
     hangMove: [1, 0.3, -1, -0.3].map((r, i) => f({ hipX: 0, hipY: -16, lean: 0, legs: i % 2 ? [-8, 2, 10, 20] : [4, 16, -4, 6], aim: null, arms: 'swing', reach: r })),
     hurt: f({ hipX: 0, hipY: -16, lean: -25, legs: [-30, -10, 20, 40], aim: null, arms: 'flail' }),
     dead: frame(drawDead(look), 22, 40),
+    bits: look.plate && look.armor ? armorBits(look.armor, look.accent) : [],
   };
+}
+
+/** Loose armor pieces: a pauldron, the chest plate, the helm shell and a thigh guard. */
+function armorBits(ar: Ramp, accent: Ramp): Frame[] {
+  const bit = (w: number, h: number, draw: (p: Pix, c: number, id: number) => void, extra?: (p: Pix) => void) => {
+    const p = new Pix(w, h);
+    p.shape(ar, (c, id) => draw(p, c, id), 2);
+    extra?.(p);
+    p.outline(OUTLINE);
+    return frame(p, w / 2, h / 2);
+  };
+  return [
+    bit(12, 9, (p, c, id) => p.ellipse(6, 4.5, 4.5, 3, c, id)),
+    bit(11, 12, (p, c, id) => { p.rect(2, 2, 7, 7, c, id); p.ellipse(5.5, 8, 3.5, 2, c, id); }, (p) => { p.set(5, 5, accent[2]); p.set(5, 6, accent[1]); }),
+    bit(13, 10, (p, c, id) => { p.ellipse(6.5, 5, 5, 3.5, c, id); }, (p) => { for (let x = 6; x < 11; x++) p.over(x, 6, accent[1]); }),
+    bit(8, 10, (p, c, id) => p.rect(2, 2, 4, 6, c, id)),
+  ];
 }
 
 /** Lying flat, rifle forward. Drawn directly rather than posed so it reads clearly. */
@@ -335,14 +394,18 @@ function drawProne(look: Look): Pix {
   p.shape(look.boots, (c, id) => { p.line(AX - 18, y, AX - 15, y - 1, c, 3, id); p.set(AX - 19, y - 3, c, id); p.set(AX - 18, y - 3, c, id); });
   p.shape(look.torso, (c, id) => p.line(AX - 6, y - 1, AX + 3, y - 2, c, 5 + look.bulk, id));
   p.shape(look.vest, (c, id) => p.line(AX - 5, y - 1, AX + 2, y - 2, c, 4 + look.bulk, id));
+  if (look.plate && look.armor) p.shape(look.armor, (c, id) => { p.line(AX - 5, y - 2, AX + 2, y - 3, c, 5 + look.bulk, id); p.ellipse(AX + 2, y - 3, 3.5, 2.5, c, id); }, 2);
   p.shape(look.skin, (c, id) => p.circle(AX + 7, y - 4, 3.4, c, id));
   if (look.head === 'bandana') {
     p.shape(look.hair, (c, id) => p.ellipse(AX + 6, y - 6, 3.3, 2, c, id));
     p.shape(look.headColor, (c, id) => p.line(AX + 3, y - 5, AX + 10, y - 6, c, 2, id));
     p.shape(look.accent, (c, id) => { p.line(AX + 3, y - 5, AX - 1, y - 6, c, 2, id); p.line(AX - 1, y - 6, AX - 4, y - 5, c, 1, id); });
     p.set(AX + 9, y - 4, OUTLINE);
+  } else if (look.head === 'beret') {
+    p.shape(look.headColor, (c, id) => p.ellipse(AX + 6, y - 6.5, 3.8, 2, c, id));
+    p.set(AX + 9, y - 4, OUTLINE);
   } else {
-    p.shape(look.headColor, (c, id) => p.ellipse(AX + 6.5, y - 5.5, 4.3, 3, c, id), 2);
+    p.shape(look.plate && look.armor ? look.armor : look.headColor, (c, id) => p.ellipse(AX + 6.5, y - 5.5, 4.3, 3, c, id), 2);
     p.shape(look.accent, (c, id) => p.rect(AX + 8, y - 4, 3, 1, c, id));
   }
   p.shape(look.gun, (c, id) => { p.line(AX + 3, y - 1, AX + 17, y - 1, c, 2 + look.bulk, id); p.line(AX + 8, y, AX + 8, y + 2, c, 2, id); });

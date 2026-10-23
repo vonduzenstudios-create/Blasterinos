@@ -20,7 +20,7 @@ export interface Assets {
 
 export function buildAssets(): Assets {
   return {
-    heroes: { ryder: buildHero(LOOKS.ryder), voss: buildHero(LOOKS.voss) },
+    heroes: { ryder: buildHero(LOOKS.ryder), voss: buildHero(LOOKS.voss), vossBare: buildHero(LOOKS.vossBare) },
     looks: LOOKS,
     fx: buildFx(),
     enemies: buildEnemyArt(),

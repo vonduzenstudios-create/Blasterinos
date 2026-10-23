@@ -157,6 +157,17 @@ export class Audio {
       case 'armorHit':
         this.osc('p0.5', 300, 120, t, 0.2, 0.25 * v, out);
         this.noise(t, 0.2, 0.2 * v, out, 'bandpass', 3000, 600, 3);
+        // plates clattering away
+        this.osc('square', 1900, 1700, t + 0.04, 0.07, 0.09 * v, out);
+        this.osc('square', 2700, 2500, t + 0.11, 0.06, 0.07 * v, out);
+        this.osc('square', 2200, 2050, t + 0.19, 0.05, 0.05 * v, out);
+        break;
+      case 'shwing': // armor snapping back on: a bright metallic sweep that rings out
+        this.noise(t, 0.3, 0.2 * v, out, 'bandpass', 2000, 9000, 4);
+        this.osc('p0.125', 1046, 4186, t, 0.12, 0.07 * v, out);
+        this.osc('sine', 2093, 2093, t + 0.08, 0.55, 0.13 * v, out, 0.004);
+        this.osc('sine', 3136, 3136, t + 0.08, 0.5, 0.09 * v, out, 0.004);
+        this.osc('triangle', 4186, 4186, t + 0.1, 0.35, 0.05 * v, out, 0.004);
         break;
       case 'smallBoom':
         this.noise(t, 0.3, 0.45 * v, out, 'lowpass', 3500, 120, 1);

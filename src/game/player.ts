@@ -5,7 +5,7 @@ import { makeBody, type Body, type Rail } from './world';
 import type { Game } from './game';
 import { fireWeapon, type Weapon, type WeaponKind } from './weapons';
 import { muzzle, standPose, airPose, runPose, hangPose, AIMS, HANG_DROP, type Look, type HeroFrames } from '../art/humanoid';
-import { Anim } from './effects';
+import { Anim, Debris } from './effects';
 import { TS } from '../art/tiles';
 
 export interface HeroDef {
@@ -34,6 +34,8 @@ type State = 'play' | 'hook' | 'reel' | 'hang' | 'dying' | 'dead';
 export class Player {
   def: HeroDef;
   frames: HeroFrames;
+  /** Frames once the armor has been knocked off (same as frames for heroes without armor). */
+  bareFrames: HeroFrames;
   look: Look;
   body: Body;
   sprite: Sprite;
@@ -52,6 +54,8 @@ export class Player {
   barrier = 0;
   armor = false;
   armorRegen = 0;
+  /** Counts down after the armor snaps back on: drives the white flash and glint. */
+  armorFlash = 0;
   t = 0;
   stateT = 0;
   lastSafe = { x: 0, y: 0 };
@@ -74,6 +78,7 @@ export class Player {
   constructor(public g: Game, def: HeroDef, x: number, y: number) {
     this.def = def;
     this.frames = g.assets.heroes[def.id];
+    this.bareFrames = g.assets.heroes[def.id + 'Bare'] ?? this.frames;
     this.look = g.assets.looks[def.id];
     this.body = makeBody(x, y, 10, 26);
     this.sprite = g.gfx.sprite(this.frames.stand.f, 30);
@@ -119,7 +124,8 @@ export class Player {
     if (this.grabCool > 0) this.grabCool--;
     if (this.invuln > 0) this.invuln--;
     if (this.barrier > 0) this.barrier--;
-    if (this.def.armor && !this.armor) { this.armorRegen--; if (this.armorRegen <= 0) { this.armor = true; g.audio.sfx('swap'); } }
+    if (this.armorFlash > 0) this.armorFlash--;
+    if (this.def.armor && !this.armor && this.alive) { this.armorRegen--; if (this.armorRegen <= 0) this.armorUp(); }
 
     if (this.state === 'dying' || this.state === 'dead') { this.updateDeath(); this.draw(); return; }
 
@@ -397,10 +403,28 @@ export class Player {
       this.armor = false; this.armorRegen = 60 * 12; this.invuln = 90;
       g.audio.sfx('armorHit');
       g.gfx.shake = 3;
+      // the plates fly off and tumble away
+      const bits = this.frames.bits, [cx, cy] = this.center();
+      for (let i = 0; i < bits.length + 2; i++) {
+        const side = i % 2 ? 1 : -1;
+        const d = new Debris(g, bits[i % bits.length], cx + side * 3, cy - 4 + (i % 3) * 4, side * (0.8 + Math.random() * 1.8) - this.facing * 0.4, -2.5 - Math.random() * 2, 55 + Math.floor(Math.random() * 20), 0.2, 33);
+        d.spin = side * (0.15 + Math.random() * 0.2);
+        g.addFx(d);
+      }
       for (let i = 0; i < 8; i++) g.addFx(new Anim(g, g.assets.fx.spark, this.body.x + (Math.random() - 0.5) * 16, this.body.y - 14 + (Math.random() - 0.5) * 20, 2, 42, true, i));
       return;
     }
     this.die(false);
+  }
+  /** The regen timer ran out (or he respawned): the armor snaps back on with a shwing. */
+  private armorUp(sound = true) {
+    const g = this.g;
+    this.armor = true; this.armorRegen = 0;
+    if (!sound) return;
+    this.armorFlash = 18;
+    g.audio.sfx('shwing');
+    const [cx, cy] = this.center();
+    for (let i = 0; i < 5; i++) g.addFx(new Anim(g, g.assets.fx.spark, cx + (i - 2) * 4, cy - 10 + i * 5, 2, 42, true, i * 2));
   }
   die(fell: boolean) {
     if (!this.alive) return;
@@ -436,10 +460,12 @@ export class Player {
     this.curl = true;
     this.invuln = 150;
     this.lastSafe = { x, y };
+    // a fresh life comes with a fresh suit of armor
+    if (this.def.armor) this.armorUp(!this.armor);
   }
 
   draw() {
-    const s = this.sprite, b = this.body, fr = this.frames;
+    const s = this.sprite, b = this.body, fr = this.armor || !this.def.armor ? this.frames : this.bareFrames;
     s.rot = 0;
     s.flip = this.facing < 0;
     if (this.state === 'dying') { s.setFrame(fr.hurt); s.rot = (this.stateT * 0.25) * -this.facing; }
@@ -458,13 +484,16 @@ export class Player {
     } else s.setFrame(fr.air[this.aim]);
     s.x = b.x; s.y = this.curl && !b.onGround && this.state === 'play' ? b.y - 12 : b.y;
     if (this.state === 'dying' && s.rot !== 0) s.y = b.y - 14;
-    s.visible = !(this.invuln > 0 && this.alive && Math.floor(this.t / 3) % 2 === 0);
+    s.visible = !(this.invuln > 0 && this.alive && Math.floor(this.t / 3) % 2 === 0) || this.armorFlash > 0;
+    s.flash = this.armorFlash > 0 ? this.armorFlash / 18 : 0;
     s.sync();
     // barrier power-up / armor glint
     const sh = this.shieldSprite;
-    if (this.alive && (this.barrier > 0 || (this.armor && this.t % 120 < 10))) {
+    const regen = this.armorFlash > 6;
+    if (this.alive && (this.barrier > 0 || regen || (this.armor && this.t % 120 < 10))) {
       sh.visible = this.barrier > 120 || this.t % 4 < 2 || this.barrier === 0;
-      sh.setFrame(this.g.assets.fx.ring[this.barrier > 0 ? 3 + (Math.floor(this.t / 3) % 2) : Math.min(5, Math.floor((this.t % 120) / 2))]);
+      const ring = this.g.assets.fx.ring;
+      sh.setFrame(ring[this.barrier > 0 ? 3 + (Math.floor(this.t / 3) % 2) : regen ? Math.min(5, Math.floor((18 - this.armorFlash) / 2)) : Math.min(5, Math.floor((this.t % 120) / 2))]);
       sh.x = b.x; sh.y = b.y - 13;
       sh.sync();
     } else sh.visible = false;

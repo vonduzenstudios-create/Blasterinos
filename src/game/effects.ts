@@ -33,6 +33,8 @@ export class Debris {
   dead = false;
   sprite: Sprite;
   life: number;
+  /** Rotation per frame, for tumbling chunks. */
+  spin = 0;
   constructor(public g: Game, f: Frame, public x: number, public y: number, public vx: number, public vy: number, life = 40, public grav = 0.18, z = 41) {
     this.sprite = g.gfx.sprite(f, z);
     this.life = life;
@@ -43,6 +45,7 @@ export class Debris {
     this.life--;
     if (this.life <= 0) this.dead = true;
     this.sprite.x = this.x; this.sprite.y = this.y;
+    this.sprite.rot += this.spin;
     this.sprite.visible = this.life > 8 || this.life % 2 === 0;
     this.sprite.sync();
   }
