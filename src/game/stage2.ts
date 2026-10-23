@@ -36,6 +36,7 @@ export class Stage2 implements Stage {
   readonly name = 'SCORCHED DUNES';
   readonly song = DESERT_SONG;
   readonly bossSong = WORM_SONG;
+  readonly villain = 'THE GREAT DUNE WORM';
   readonly clearLines = ['THE DUNE WORM HAS BEEN CUT DOWN TO SIZE.'];
   state: State = 'ride';
   jeep: Jeep | null = null;

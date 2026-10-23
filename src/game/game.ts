@@ -15,10 +15,12 @@ import type { Stage } from './stage';
 import { Stage1 } from './stage1';
 import { Stage2 } from './stage2';
 import { Stage3 } from './stage3';
+import { Stage5 } from './stage5';
+import { Ending } from './ending';
 import type { Weapon } from './weapons';
 
-type Mode = 'title' | 'select' | 'intro' | 'play' | 'paused' | 'gameover' | 'clear';
-const STAGES = [Stage1, Stage2, Stage3];
+type Mode = 'title' | 'select' | 'intro' | 'play' | 'paused' | 'gameover' | 'clear' | 'ending';
+const STAGES = [Stage1, Stage2, Stage3, Stage5];
 
 interface Updatable { dead: boolean; update(): void; destroy(): void; }
 interface FloatText { text: string; x: number; y: number; t: number; }
@@ -83,6 +85,7 @@ export class Game {
   titleIdx = 0;
   menuIdx = 0;
   titleCam = 0;
+  ending: Ending | null = null;
   private sceneReady = false;
 
   constructor(glCanvas: HTMLCanvasElement, hudCanvas: HTMLCanvasElement) {
@@ -104,6 +107,11 @@ export class Game {
   get bossActive() { return this.stage.bossActive; }
   get coop() { return this.pads.length > 1; }
   get stageCount() { return STAGES.length; }
+  /** Index into the stage list of the stage with this number. */
+  stageIndex(num: number) {
+    const i = STAGES.findIndex((S) => new S(this).num === num);
+    return i >= 0 ? i : Math.max(0, Math.min(STAGES.length - 1, num - 1));
+  }
   /** Players still in the game (alive, or dying and about to drop back in). */
   livePlayers() { return this.players.filter((p) => !this.out.has(p)); }
   padOf(p: Player) { return this.pads[this.players.indexOf(p)] ?? this.device; }
@@ -233,8 +241,15 @@ export class Game {
             const carry = this.players.map((p) => p.weapons);
             this.setStage(this.stageIdx + 1);
             this.startStage(0, carry);
-          } else this.toTitle();
+          } else {
+            // that was the last one: roll the credits
+            this.ending = new Ending(this, STAGES.map((S) => new S(this)));
+            this.setMode('ending');
+          }
         }
+        break;
+      case 'ending':
+        if (this.ending!.update()) { this.ending = null; this.toTitle(); }
         break;
     }
     this.gfx.update();
@@ -271,7 +286,7 @@ export class Game {
       this.lives = 3; this.score = 0; this.continues = 3;
       // ?stage=2 (and optionally &cp=1 or 2) jumps straight to a later stage for testing
       const q = new URLSearchParams(location.search);
-      const st = Math.max(1, Math.min(STAGES.length, parseInt(q.get('stage') || '1') || 1)) - 1;
+      const st = this.stageIndex(parseInt(q.get('stage') || '1') || 1);
       if (st !== this.stageIdx) this.setStage(st);
       this.startStage(Math.max(0, Math.min(2, parseInt(q.get('cp') || '0') || 0)));
     }
@@ -444,6 +459,7 @@ export class Game {
     const c = this.hud;
     c.clearRect(0, 0, VW, VH);
     if (this.mode === 'title') return this.drawTitle();
+    if (this.mode === 'ending') return this.ending!.draw(c);
     if (this.mode === 'select') return this.drawSelect();
     const p = this.players[0];
     // lives as medals
@@ -515,7 +531,7 @@ export class Game {
       this.stage.clearLines.forEach((l, k) => { if (this.modeT > 100 + k * 20) drawText(c, l, VW / 2, 124 + k * 12, '#c8c0e0', { align: 'center' }); });
       const last = this.stageIdx + 1 >= STAGES.length;
       const y = 128 + this.stage.clearLines.length * 12;
-      if (this.modeT > 160) drawText(c, last ? 'THANKS FOR PLAYING THE BLASTERINOS TECH DEMO' : 'NEXT: STAGE ' + (this.stage.num + 1), VW / 2, y, last ? '#c8c0e0' : '#ffd040', { align: 'center' });
+      if (this.modeT > 160) drawText(c, last ? 'MISSION COMPLETE' : 'NEXT: STAGE ' + new STAGES[this.stageIdx + 1](this).num, VW / 2, y, '#ffd040', { align: 'center' });
       if (this.modeT > 240 && this.modeT % 60 < 40) drawText(c, 'PRESS START', VW / 2, 180, '#ffffff', { align: 'center' });
     }
   }

@@ -81,7 +81,7 @@ export class Lobby {
 
   private host() {
     const q = new URLSearchParams(location.search);
-    const stage = Math.max(0, Math.min(this.game.stageCount - 1, (parseInt(q.get('stage') || '1') || 1) - 1));
+    const stage = this.game.stageIndex(parseInt(q.get('stage') || '1') || 1);
     const cp = Math.max(0, Math.min(2, parseInt(q.get('cp') || '0') || 0));
     this.connect({ t: 'host', stage, cp });
   }

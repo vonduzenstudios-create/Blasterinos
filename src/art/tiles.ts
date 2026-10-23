@@ -8,6 +8,8 @@ export const T = { E: 0, GROUND: 1, ROCK: 2, PLANK: 3, LEDGE: 4, METAL: 5, BRIDG
 export const SOLID = new Set<number>([T.GROUND, T.ROCK, T.METAL, T.SAND, T.SANDSTONE, T.BEACH, T.REEF]);
 export const ONEWAY = new Set<number>([T.PLANK, T.LEDGE, T.BRIDGE, T.SCAFFOLD, T.DOCK]);
 export const TS = 16;
+/** Tiles that a later stage paints from its own art file (see art/hive.ts). */
+export const TILE_PAINTERS = new Map<number, (p: Pix, get: TileGetter, tx: number, ty: number, ox: number, oy: number) => void>();
 
 export function hash(x: number, y: number, s = 0): number {
   let h = (x * 374761393 + y * 668265263 + s * 1442695041) | 0;
@@ -60,6 +62,7 @@ export function paintChunk(get: TileGetter, cx: number, cy: number, n: number): 
     else if (t === T.SANDSTONE) paintSandstone(p, tx, ty, ox, oy, !solidish(up), !solidish(lf), !solidish(rt), !solidish(dn));
     else if (t === T.SCAFFOLD) paintScaffold(p, tx, ty, ox, oy, lf !== T.SCAFFOLD, rt !== T.SCAFFOLD);
     else if (t >= T.BEACH && t <= T.DOCK) paintBeachTile(p, t, tx, ty, ox, oy, !solidish(up), !solidish(lf), !solidish(rt), lf !== t, rt !== t);
+    else TILE_PAINTERS.get(t)?.(p, get, tx, ty, ox, oy);
   }
   if (!any) return null;
   p.outline(OUTLINE_COLOR);
