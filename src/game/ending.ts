@@ -49,7 +49,6 @@ export class Ending {
     L('A VONDUZEN STUDIOS GAME', gold); L('');
     L('DESIGN AND DIRECTION', gold); L('MATTHEW DAUPHINAIS'); L('');
     L('CODE, PIXELS, SOUND AND MUSIC', gold); L('CLAUDE'); L('ALL OF IT GENERATED IN CODE', soft); L(''); L('');
-    L('NO GRUBS WERE HARMED', soft); L('IN THE MAKING OF THIS GAME', soft); L(''); L('OK, A FEW.', soft); L(''); L(''); L('');
     L('THANK YOU FOR PLAYING', white);
     // scroll distance until the last line has gone off the top
     this.rollEnd = this.lines.reduce((h, l) => h + advance(l), 0) + VH + 30;
@@ -121,7 +120,7 @@ export class Ending {
       c.fillStyle = `rgba(255,250,220,${a.toFixed(2)})`; c.fillRect(0, 0, VW, VH);
     }
     const say = (from: number, text: string, y: number, col = '#ffffff') => { if (t > from && (Math.floor(t / 3) % 2 === 0 || t > from + 12)) drawText(c, text, VW / 2, y, col, { align: 'center' }); };
-    say(20, 'THE HIVE MOTHER IS DEAD.', 30, '#ffd040');
+    say(20, 'THE HIVE QUEEN IS DEAD.', 30, '#ffd040');
     say(90, 'WITHOUT HER, THE WHOLE NEST CAVES IN...', 46);
     say(200, 'RYDER AND VOSS MAKE IT OUT. BARELY.', 62);
   }

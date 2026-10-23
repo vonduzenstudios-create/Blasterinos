@@ -8,11 +8,11 @@ import type { Stage, Deck } from './stage';
 import type { Hittable } from './weapons';
 import { World } from './world';
 import type { Spawn, Scenery } from './level';
-import { Orifice, Pustule, HiveMother, type OrificeDir } from './hive';
-import { HIVE_SONG, MOTHER_SONG } from './hivemusic';
+import { BroodPod, Pustule, HiveQueen, type PodDir } from './hive';
+import { HIVE_SONG, QUEEN_SONG } from './hivemusic';
 
 // Stage 5: "The Alien Hive", the last one. A run through the guts of the nest,
-// past acid pits and the holes the grubs come out of, down to the Hive Mother.
+// past acid pits and the brood pods the hatchlings burst from, down to the Hive Queen.
 
 export const MAP_W = 250, MAP_H = 16;
 export const GROUND = 13;
@@ -21,7 +21,7 @@ const CEIL = 3 * TS;                 // underside of the roof
 const CAM_Y = 40;
 const CP1_X = 116 * TS;
 const ARENA_X = 226 * TS;
-const MOTHER_X = ARENA_X + 290;
+const QUEEN_X = ARENA_X + 290;
 const PITS: [number, number][] = [[32, 34], [70, 73], [112, 115], [154, 157], [206, 209]];
 
 type State = 'run' | 'boss';
@@ -30,22 +30,22 @@ export class Stage5 implements Stage {
   readonly num = 5;
   readonly name = 'THE ALIEN HIVE';
   readonly song = HIVE_SONG;
-  readonly bossSong = MOTHER_SONG;
-  readonly villain = 'THE HIVE MOTHER';
-  readonly clearLines = ['THE HIVE MOTHER GOT HER BEHIND KICKED.', 'THE WHOLE NEST IS COMING DOWN!'];
+  readonly bossSong = QUEEN_SONG;
+  readonly villain = 'THE HIVE QUEEN';
+  readonly clearLines = ['THE HIVE QUEEN HAS FALLEN.', 'THE WHOLE NEST IS COMING DOWN!'];
   state: State = 'run';
-  mother: HiveMother | null = null;
+  queen: HiveQueen | null = null;
   lockT = 0;
 
   constructor(public g: Game) {}
 
-  get inBoss() { return !!this.mother; }
+  get inBoss() { return !!this.queen; }
   get bossActive() { return this.state === 'boss'; }
 
   build(cp: number) {
     const g = this.g;
     buildHive();
-    this.mother = null; this.lockT = 0; this.state = 'run';
+    this.queen = null; this.lockT = 0; this.state = 'run';
     g.world = buildWorld();
     g.world.build(g.gfx);
     g.scenery = buildScenery(g);
@@ -71,28 +71,28 @@ export class Stage5 implements Stage {
       if (gx.camX >= ARENA_X) {
         gx.camX = ARENA_X; this.state = 'boss'; this.lockT = 0; g.checkpoint = 2;
         g.audio.sfx('alarm');
-        g.banner = { text: 'WARNING', sub: 'THE HIVE MOTHER', t: 60 };
+        g.banner = { text: 'WARNING', sub: 'THE HIVE QUEEN', t: 60 };
         for (const e of g.enemies) e.dead = true;
       }
     } else {
       gx.camX = ARENA_X;
-      if (++this.lockT === 60 && !this.mother) {
-        this.mother = new HiveMother(g, MOTHER_X, FLOOR, ARENA_X, CEIL);
-        g.audio.play(MOTHER_SONG);
+      if (++this.lockT === 60 && !this.queen) {
+        this.queen = new HiveQueen(g, QUEEN_X, FLOOR, ARENA_X, CEIL);
+        g.audio.play(QUEEN_SONG);
       }
     }
   }
 
-  update() { this.mother?.update(); }
-  parts(): Hittable[] { return this.mother ? this.mother.parts() : []; }
+  update() { this.queen?.update(); }
+  parts(): Hittable[] { return this.queen ? this.queen.parts() : []; }
   bossBar(): [number, number, string] | null {
-    const m = this.mother;
-    return m && m.mode !== 'intro' ? [m.hp, m.maxHp, 'HIVE MOTHER'] : null;
+    const m = this.queen;
+    return m && m.mode !== 'intro' ? [m.hp, m.maxHp, 'HIVE QUEEN'] : null;
   }
   spawn(s: Spawn) {
     const g = this.g;
     switch (s.kind) {
-      case 'orifice': g.enemies.push(new Orifice(g, s.x, s.y, s.arg as OrificeDir)); return true;
+      case 'brood': g.enemies.push(new BroodPod(g, s.x, s.y, s.arg as PodDir)); return true;
       case 'pustule': g.enemies.push(new Pustule(g, s.x, s.y)); return true;
     }
     return false;
@@ -100,8 +100,8 @@ export class Stage5 implements Stage {
   deck(): Deck | null { return null; }
   respawn() { return false; }
   onMidBossDefeated() {}
-  onBossDefeated() { this.mother?.destroy(); this.mother = null; }
-  destroy() { this.mother?.destroy(); this.mother = null; }
+  onBossDefeated() { this.queen?.destroy(); this.queen = null; }
+  destroy() { this.queen?.destroy(); this.queen = null; }
 }
 
 // ---------------------------------------------------------------- map
@@ -140,7 +140,7 @@ function buildWorld(): World {
   rib(186, 189, 10);
   rib(192, 195, 8);
   resin(196, 9, 200, 12);
-  // the Mother's chamber: two ribs to get up at her head
+  // the Queen's chamber: two ribs to get up at her head
   rib(229, 232, 8);
   rib(235, 238, 8);
   return w;
@@ -149,7 +149,7 @@ function buildWorld(): World {
 function buildSpawns(): Spawn[] {
   const px = (t: number) => t * TS + 8;
   const py = (r: number) => r * TS;
-  const hole = (x: number, y: number, dir: OrificeDir): Spawn => ({ kind: 'orifice', x, y, arg: dir });
+  const hole = (x: number, y: number, dir: PodDir): Spawn => ({ kind: 'brood', x, y, arg: dir });
   return [
     { kind: 'capsule', x: px(12), y: py(7), arg: 'M' },
     hole(25 * TS, py(11), 'up'),

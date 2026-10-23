@@ -220,31 +220,21 @@ export class Audio {
         this.noise(t, 0.12, 0.4 * v, out, 'bandpass', 900, 300, 2);
         this.osc('square', 140, 60, t, 0.12, 0.2 * v, out);
         break;
-      case 'plop': // a hive grub squeezing out of its hole
-        this.osc('sine', 520, 140, t, 0.12, 0.3 * v, out);
-        this.osc('sine', 180, 90, t + 0.08, 0.1, 0.2 * v, out);
-        this.noise(t, 0.12, 0.15 * v, out, 'bandpass', 900, 300, 4);
+      case 'hatch': // a hatchling bursting out of its pod
+        this.noise(t, 0.18, 0.3 * v, out, 'bandpass', 2400, 700, 3);
+        this.osc('square', 900, 220, t, 0.12, 0.1 * v, out);
+        this.noise(t + 0.06, 0.25, 0.15 * v, out, 'highpass', 3000, 6000, 0.8);
         break;
-      case 'strain': // a hole working itself up to it
-        this.osc('sawtooth', 70, 95, t, 0.4, 0.08 * v, out, 0.1, 'lin');
-        this.noise(t, 0.4, 0.08 * v, out, 'lowpass', 300, 500, 2);
+      case 'charge': // a pod's seams lighting up
+        this.osc('sawtooth', 120, 480, t, 0.4, 0.07 * v, out, 0.05, 'lin');
+        this.osc('p0.125', 240, 960, t, 0.4, 0.05 * v, out, 0.05, 'lin');
         break;
-      case 'toot': { // the Hive Mother's gas attack: a long, wet, descending blat
-        const ctx2 = this.ctx!;
-        const o = ctx2.createOscillator(); o.type = 'sawtooth';
-        o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.9);
-        const lfo = ctx2.createOscillator(), lg = ctx2.createGain();
-        lfo.frequency.setValueAtTime(26, t); lfo.frequency.linearRampToValueAtTime(14, t + 0.9);
-        lg.gain.value = 30; lfo.connect(lg); lg.connect(o.frequency);
-        const f = ctx2.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700; f.Q.value = 4;
-        const g = ctx2.createGain();
-        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.4 * v, t + 0.03);
-        g.gain.setValueAtTime(0.4 * v, t + 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + 1);
-        o.connect(f); f.connect(g); g.connect(out);
-        o.start(t); lfo.start(t); o.stop(t + 1.05); lfo.stop(t + 1.05);
-        this.noise(t, 0.9, 0.18 * v, out, 'lowpass', 600, 150, 2);
+      case 'quake': // the Hive Queen slamming the floor: boom plus a rising plasma sweep
+        this.osc('sine', 90, 30, t, 0.8, 0.5 * v, out, 0.002);
+        this.noise(t, 0.9, 0.45 * v, out, 'lowpass', 1200, 90, 1);
+        this.osc('sawtooth', 200, 1400, t + 0.05, 0.5, 0.08 * v, out, 0.02);
+        this.noise(t + 0.05, 0.6, 0.15 * v, out, 'bandpass', 800, 4000, 2);
         break;
-      }
       case 'menu':
         this.osc('p0.5', 988, 988, t, 0.05, 0.12 * v, out);
         break;
