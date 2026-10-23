@@ -15,6 +15,7 @@ export class Stage1 implements Stage {
   readonly name = 'VENOM FALLS';
   readonly song = STAGE_SONG;
   readonly bossSong = BOSS_SONG;
+  readonly villain = 'THE HYDRA OF VENOM FALLS';
   readonly clearLines = ['THE HYDRA OF VENOM FALLS IS NO MORE.'];
   gate: Gate | null = null;
   hydra: Hydra | null = null;

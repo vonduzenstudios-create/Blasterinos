@@ -18,7 +18,8 @@ export const LAKE_Y = 150;
 
 export type SpawnKind = 'runners' | 'rifle' | 'rifleBag' | 'sniper' | 'turret' | 'leaper' | 'drone' | 'capsule' | 'crawler'
   | 'biker' | 'tower' | 'burrower'
-  | 'crab' | 'fish';
+  | 'crab' | 'fish'
+  | 'orifice' | 'pustule';
 export interface Spawn { kind: SpawnKind; x: number; y: number; arg?: any; done?: boolean; }
 
 export function buildWorld(): World {

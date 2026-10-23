@@ -35,6 +35,7 @@ export class Stage3 implements Stage {
   readonly name = 'PEARL BEACH';
   readonly song = BEACH_SONG;
   readonly bossSong = CLAM_SONG;
+  readonly villain = 'THE GIANT CLAM';
   readonly clearLines = ['THE GIANT CLAM HAS CLAMMED UP FOR GOOD.'];
   state: State = 'foot';
   clam: GiantClam | null = null;

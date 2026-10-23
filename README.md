@@ -12,6 +12,12 @@ bikers and an attack gunship chase you down, until something enormous erupts out
 road and flips the jeep. Finish on foot over dunes, mesas and quicksand to the nest of the
 Great Dune Worm. Clearing stage 1 rolls straight into stage 2 with your weapons.
 
+**Stage 5, The Alien Hive:** the final stage. A run through the guts of an alien nest, past
+acid pits, swollen acid pustules and the puckered holes the grubs keep squeezing out of, down
+to the Hive Mother. She backs into her chamber rear end first, lays eggs and breaks wind; shoot
+her vent while it is open and her head whenever you can reach it. Beating her rolls the
+ending and credits.
+
 ## Play
 
 ```bash
@@ -58,7 +64,8 @@ Hold down while standing to go prone.
   shaking mound). It also sends baby worms through the sand.
 
 Testing shortcut: `/?stage=2` starts on stage 2 after soldier select, and `&cp=1` or
-`&cp=2` starts from its on-foot or boss checkpoint.
+`&cp=2` starts from its on-foot or boss checkpoint. `/?stage=5` does the same for the hive
+(`&cp=1` halfway, `&cp=2` the Hive Mother).
 
 ## Online co-op
 
@@ -106,4 +113,5 @@ a minute. To test locally: `cd server && npm install && npm start`, then open
 - **`src/game/`** holds the gameplay: player, weapons, enemies, bosses and the game state
   machine. Each stage implements the `Stage` interface (`stage.ts`): `stage1.ts` with
   `level.ts` and `boss.ts` for Venom Falls, `stage2.ts` with `vehicles.ts` and `worm.ts`
-  for Scorched Dunes. The waterfall, water and quicksand are small GLSL shaders.
+  for Scorched Dunes, `stage5.ts` with `hive.ts` and `art/hive.ts` for the Alien Hive, and
+  `ending.ts` for the credits. The waterfall, water and quicksand are small GLSL shaders.

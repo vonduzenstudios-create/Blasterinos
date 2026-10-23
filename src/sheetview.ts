@@ -6,6 +6,7 @@ import { buildProps } from './art/props';
 import { buildHydra } from './art/hydra';
 import { buildDesert } from './art/desert';
 import { buildBeach } from './art/beach';
+import { buildHive } from './art/hive';
 import { showSheet } from './sheet';
 
 export function run() {
@@ -33,5 +34,10 @@ export function run() {
   groups.push(['beach backdrops', [asFrame(b.sky), asFrame(b.islands)]]);
   groups.push(['beach props', [...b.palm, b.hedgehog, b.tower, b.boat, b.piling, b.starfish, b.shells, b.grass, b.crate]]);
   groups.push(['giant clam', [b.shell, ...b.lips, ...b.pearl, b.bigPearl, ...b.geyser, ...b.bubbles, ...b.crab, b.crabEyes, ...b.fish]]);
+  const hv = buildHive();
+  groups.push(['hive backdrops', [asFrame(hv.sky), asFrame(hv.far), asFrame(hv.near)]]);
+  groups.push(['hive props', [...hv.pod, hv.tendril, hv.eggCluster, hv.bones, ...hv.pustule, ...hv.egg, ...hv.gas]]);
+  groups.push(['hive orifices + grubs', [...hv.orifice, ...hv.grub, hv.grubCurl, ...hv.splat]]);
+  groups.push(['hive mother', [hv.lobe, ...hv.vent, hv.thorax, ...hv.head, hv.leg]]);
   showSheet(groups);
 }

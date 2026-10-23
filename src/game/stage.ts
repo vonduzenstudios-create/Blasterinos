@@ -14,6 +14,8 @@ export interface Stage {
   readonly name: string;
   readonly song: Song;
   readonly bossSong: Song;
+  /** The boss, by name, for the ending's credits roll. */
+  readonly villain?: string;
   /** Lines shown under the score on the stage clear screen. */
   readonly clearLines: string[];
   /** The boss is up, so a restart here should open with the boss song. */
