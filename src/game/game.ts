@@ -14,10 +14,11 @@ import { explode } from './effects';
 import type { Stage } from './stage';
 import { Stage1 } from './stage1';
 import { Stage2 } from './stage2';
+import { Stage3 } from './stage3';
 import type { Weapon } from './weapons';
 
 type Mode = 'title' | 'select' | 'intro' | 'play' | 'paused' | 'gameover' | 'clear';
-const STAGES = [Stage1, Stage2];
+const STAGES = [Stage1, Stage2, Stage3];
 
 interface Updatable { dead: boolean; update(): void; destroy(): void; }
 interface FloatText { text: string; x: number; y: number; t: number; }

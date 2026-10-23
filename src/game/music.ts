@@ -3,9 +3,9 @@ import { parseSteps, midiOf, type Song } from '../engine/audio';
 // Songs are written as step strings (one token per 16th note). Bass, arpeggios
 // and drums are generated from the chord chart, leads are hand written.
 
-type Chord = [string, 'M' | 'm' | '7'];
+export type Chord = [string, 'M' | 'm' | '7'];
 
-function bassLine(chords: Chord[], pattern: number[]): string {
+export function bassLine(chords: Chord[], pattern: number[]): string {
   const toks: string[] = [];
   for (const [root] of chords) {
     const r = midiOf(root + '2');
@@ -18,7 +18,7 @@ function bassLine(chords: Chord[], pattern: number[]): string {
   }
   return toks.join(' ');
 }
-function arpLine(chords: Chord[], octave = 4, rate = 1): string {
+export function arpLine(chords: Chord[], octave = 4, rate = 1): string {
   const toks: string[] = [];
   for (const [root, q] of chords) {
     const r = midiOf(root + octave);
@@ -27,7 +27,7 @@ function arpLine(chords: Chord[], octave = 4, rate = 1): string {
   }
   return toks.join(' ');
 }
-function padLine(chords: Chord[], tone: number): string {
+export function padLine(chords: Chord[], tone: number): string {
   const toks: string[] = [];
   for (const [root, q] of chords) {
     const tones = q === 'M' ? [0, 4, 7] : q === 'm' ? [0, 3, 7] : [0, 4, 10];
@@ -39,7 +39,7 @@ function padLine(chords: Chord[], tone: number): string {
 const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 function nameOf(m: number) { return NAMES[m % 12] + (Math.floor(m / 12) - 1); }
 
-function drums(bars: number, base: string[], fill: string[], fillEvery = 8, crashEvery = 8): string[] {
+export function drums(bars: number, base: string[], fill: string[], fillEvery = 8, crashEvery = 8): string[] {
   const out: string[] = [];
   for (let b = 0; b < bars; b++) {
     const pat = (b + 1) % fillEvery === 0 ? fill : base;
@@ -48,7 +48,7 @@ function drums(bars: number, base: string[], fill: string[], fillEvery = 8, cras
   return out;
 }
 
-function song(bpm: number, loop: boolean, parts: { inst: any; vol: number; notes?: string; drum?: string[] }[]): Song {
+export function song(bpm: number, loop: boolean, parts: { inst: any; vol: number; notes?: string; drum?: string[] }[]): Song {
   let steps = 0;
   const tracks = parts.map((p) => {
     if (p.drum) { steps = Math.max(steps, p.drum.length); return { inst: p.inst, vol: p.vol, events: [], drum: p.drum }; }

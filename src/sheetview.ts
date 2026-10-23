@@ -5,6 +5,7 @@ import { buildEnemyArt } from './art/enemies';
 import { buildProps } from './art/props';
 import { buildHydra } from './art/hydra';
 import { buildDesert } from './art/desert';
+import { buildBeach } from './art/beach';
 import { showSheet } from './sheet';
 
 export function run() {
@@ -28,5 +29,9 @@ export function run() {
   groups.push(['desert props', [...d.cactus, d.ribs, d.skull, d.sign, d.wreck, d.barrel, d.tower, ...d.boulder]]);
   groups.push(['vehicles', [...d.jeep, d.jeepWreck, d.driver, ...d.bike, d.heli, d.heliWreck, ...d.heliRotor, ...d.bomb, ...d.sandball]]);
   groups.push(['sandworm', [...d.wormSeg, ...d.wormHead, d.mound, ...d.ripple, ...d.larva]]);
+  const b = buildBeach();
+  groups.push(['beach backdrops', [asFrame(b.sky), asFrame(b.islands)]]);
+  groups.push(['beach props', [...b.palm, b.hedgehog, b.tower, b.boat, b.piling, b.starfish, b.shells, b.grass, b.crate]]);
+  groups.push(['giant clam', [b.shell, ...b.lips, ...b.pearl, b.bigPearl, ...b.geyser, ...b.bubbles, ...b.crab, b.crabEyes, ...b.fish]]);
   showSheet(groups);
 }

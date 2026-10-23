@@ -258,6 +258,11 @@ export class Audio {
         this.osc('sine', 300, 90, t, 0.25, 0.25 * v, out);
         this.noise(t, 0.3, 0.2 * v, out, 'bandpass', 600, 250, 3);
         break;
+      case 'pearl': // the clam spitting: a wet pop and a bright ping
+        this.noise(t, 0.08, 0.3 * v, out, 'bandpass', 1200, 500, 3);
+        this.osc('sine', 1760, 2640, t + 0.02, 0.12, 0.14 * v, out);
+        this.osc('p0.25', 2200, 1800, t + 0.04, 0.08, 0.06 * v, out);
+        break;
     }
   }
 
