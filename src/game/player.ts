@@ -92,15 +92,15 @@ export class Player {
   }
   center(): [number, number] { return [this.body.x, this.body.y - (this.prone ? 5 : 14)]; }
 
-  giveWeapon(k: WeaponKind) {
+  /** Equip a weapon. Returns the weapon it displaced (never the rifle), so it can be dropped. */
+  giveWeapon(k: WeaponKind, level = 1): Weapon | null {
     const w = this.weapon;
-    if (w.kind === k) w.level = Math.min(2, w.level + 1);
-    else {
-      // fill the empty (rifle) slot first so the player keeps what they had
-      const other = this.weapons[1 - this.slot];
-      if (w.kind !== 'R' && other.kind === 'R') { this.weapons[1 - this.slot] = { kind: k, level: 1 }; this.slot = 1 - this.slot; }
-      else this.weapons[this.slot] = { kind: k, level: 1 };
-    }
+    if (w.kind === k) { w.level = Math.min(2, w.level + level); return null; }
+    // fill the empty (rifle) slot first so the player keeps what they had
+    const other = this.weapons[1 - this.slot];
+    if (w.kind !== 'R' && other.kind === 'R') { this.weapons[1 - this.slot] = { kind: k, level }; this.slot = 1 - this.slot; return null; }
+    this.weapons[this.slot] = { kind: k, level };
+    return w.kind === 'R' ? null : w;
   }
 
   update() {
