@@ -99,7 +99,7 @@ export class Biker extends Enemy {
     this.hp = 3; this.score = 300;
     this.touch = false; // a lane closer to the camera than the jeep
     this.cullMargin = 140;
-    this.fireT = 50 + Math.random() * 40;
+    this.fireT = 80 + Math.random() * 50;
   }
   box(): [number, number, number, number] { return [this.x - 14, this.y - 36, this.x + 16, this.y - 4]; }
   update() {
@@ -113,9 +113,9 @@ export class Biker extends Enemy {
         this.rx += Math.sin(this.t / 40) * 0.6;
         if (--this.fireT <= 0 && g.player.alive) {
           const mx = this.x + 14, my = this.y - 26;
-          shoot(g, mx, my, this.angleToPlayer(mx, my), 2.3);
+          shoot(g, mx, my, this.angleToPlayer(mx, my), 1.9);
           g.addFx(new Anim(g, g.assets.fx.flash, mx, my, 2, 36, true));
-          this.fireT = 80 + Math.random() * 40;
+          this.fireT = 130 + Math.random() * 60;
         }
         if (this.t > 420) this.phase = 'leave';
         break;
@@ -204,9 +204,9 @@ export class Gunship implements Hittable {
         if (c < 80) {
           this.rx += (260 + Math.sin(this.t / 50) * 50 - this.rx) * 0.05;
           // chin gun burst
-          if (c >= 30 && c <= 54 && c % 8 === 6 && g.player.alive) {
+          if (c >= 30 && c <= 46 && c % 8 === 6 && g.player.alive) {
             const mx = this.x - 40, my = this.y + 12;
-            shoot(g, mx, my, Math.atan2(py - my, px - mx), 2.6);
+            shoot(g, mx, my, Math.atan2(py - my, px - mx), 2.2);
             g.addFx(new Anim(g, g.assets.fx.flash, mx, my, 2, 36, true));
           }
         } else if (c < 150) {
