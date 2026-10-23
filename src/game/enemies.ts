@@ -400,7 +400,13 @@ export class Capsule extends Enemy {
     this.g.addScore(this.score);
     explode(this.g, this.x, this.y, 'S', false);
     this.g.audio.sfx('capsule');
-    this.g.pickups.push(new Pickup(this.g, this.x, this.y, this.weapon));
+    if (!this.g.coop) { this.g.pickups.push(new Pickup(this.g, this.x, this.y, this.weapon)); return; }
+    // co-op: one for each player, popping out to either side
+    for (const dir of [-1, 1]) {
+      const p = new Pickup(this.g, this.x, this.y, this.weapon);
+      p.body.vx = dir * 1.3;
+      this.g.pickups.push(p);
+    }
   }
 }
 
