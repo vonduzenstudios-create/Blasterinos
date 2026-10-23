@@ -59,6 +59,8 @@ export class Player {
   hookCool = 0;
   moving = false;
   locked = false;
+  /** How well the boots hold on the ground last stood on: 1 is full control, ice is far less. */
+  grip = 1;
   private wasGround = true;
 
   constructor(public g: Game, def: HeroDef, x: number, y: number) {
@@ -135,10 +137,12 @@ export class Player {
 
     // ---- movement ----
     const speed = this.def.speed;
-    if (this.locked && ground) b.vx = 0;
-    else if (this.prone) b.vx = 0;
-    else b.vx = dirX * speed;
-    this.moving = b.vx !== 0 && ground;
+    const want = (this.locked && ground) || this.prone ? 0 : dirX * speed;
+    // on ice you only ease toward the speed you want, and keep sliding through a jump
+    if (ground) this.grip = g.stage.grip?.(b) ?? 1;
+    const grip = ground ? this.grip : this.grip < 1 ? 0.12 : 1;
+    b.vx = grip >= 1 ? want : b.vx + (want - b.vx) * grip;
+    this.moving = want !== 0 && ground;
 
     if (inp.pressed('jump') && ground) {
       if (down && this.onOneway()) { b.dropTimer = 14; b.y += 2; this.curl = false; }
@@ -329,6 +333,7 @@ export class Player {
   respawn(x: number, y: number) {
     const b = this.body;
     b.x = x; b.y = y; b.vx = 0; b.vy = 1; b.onGround = false;
+    this.grip = 1;
     this.state = 'play'; this.stateT = 0;
     this.curl = true;
     this.invuln = 150;

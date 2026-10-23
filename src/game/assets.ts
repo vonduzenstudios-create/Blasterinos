@@ -5,6 +5,7 @@ import { buildProps, type PropArt } from '../art/props';
 import { buildHydra, type HydraArt } from '../art/hydra';
 import { buildDesert, type DesertArt } from '../art/desert';
 import { buildBeach, type BeachArt } from '../art/beach';
+import { buildSnow, type SnowArt } from '../art/snow';
 import { skyCanvas, mountainsCanvas, canopyCanvas, jungleNearCanvas, cliffCanvas, fernCanvas } from '../art/backgrounds';
 
 // Everything is generated once at boot and shared.
@@ -13,6 +14,7 @@ export interface Assets {
   looks: Record<string, Look>;
   fx: FxArt; enemies: EnemyArt; props: PropArt; hydra: HydraArt; desert: DesertArt;
   beach: BeachArt;
+  snow: SnowArt;
   bg: { sky: HTMLCanvasElement; mountains: HTMLCanvasElement; canopy: HTMLCanvasElement; near: HTMLCanvasElement; cliff: HTMLCanvasElement; ferns: HTMLCanvasElement[] };
 }
 
@@ -26,6 +28,7 @@ export function buildAssets(): Assets {
     hydra: buildHydra(),
     desert: buildDesert(),
     beach: buildBeach(),
+    snow: buildSnow(),
     bg: {
       sky: skyCanvas(), mountains: mountainsCanvas(), canopy: canopyCanvas(), near: jungleNearCanvas(), cliff: cliffCanvas(),
       ferns: [fernCanvas(1), fernCanvas(2), fernCanvas(3)],
