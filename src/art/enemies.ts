@@ -9,7 +9,6 @@ export interface EnemyArt {
   leaper: { crouch: Frame; jump: Frame; idle: Frame[] };
   drone: Frame[];
   crawler: Frame[];
-  log: Frame;
   gate: { intact: Frame; core: Frame[]; coreDead: Frame; cannon: Frame[] };
   sandbag: Frame;
 }
@@ -104,19 +103,6 @@ function crawlerFrames(): Frame[] {
   });
 }
 
-function logFrame(): Frame {
-  const p = new Pix(44, 16);
-  const wood: Ramp = ramp('#3a2212', '#6a4224', '#9a6a3a');
-  p.shape(wood, (c, id) => p.rect(3, 2, 38, 12, c, id), 2);
-  for (let x = 5; x < 40; x += 3) if (vnoise(x, 1, 3) > 0.5) p.line(x, 4, x + 4, 4, wood[0]);
-  p.shape(ramp('#6a4224', '#c89a5a', '#e8c088'), (c, id) => p.ellipse(41, 8, 3, 6, c, id));
-  p.circle(41, 8, 1.5, rgb('#8a5a2a'));
-  p.ellipse(3, 8, 2.5, 6, wood[0]);
-  p.rect(14, 1, 3, 2, rgb('#2a7034'));
-  p.outline(OUTLINE);
-  return frame(p, 22, 8);
-}
-
 function gateArt() {
   const W = 72, H = 190;
   const p = new Pix(W, H);
@@ -179,7 +165,6 @@ export function buildEnemyArt(): EnemyArt {
     leaper: leaperFrames(),
     drone: droneFrames(),
     crawler: crawlerFrames(),
-    log: logFrame(),
     gate: gateArt(),
     sandbag: sandbagFrame(),
   };

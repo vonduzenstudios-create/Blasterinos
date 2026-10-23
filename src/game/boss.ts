@@ -102,7 +102,10 @@ class GatePart implements Hittable {
 
 // ================================================================ hydra
 
-type HeadMode = 'emerge' | 'idle' | 'windup' | 'lunge' | 'recover' | 'spit' | 'dead';
+type HeadMode = 'emerge' | 'idle' | 'windup' | 'lunge' | 'stuck' | 'recover' | 'spit' | 'dead';
+
+/** Heads shrug off shots unless the mouth is open: when spitting, or stuck after a missed bite. */
+const ARMORED = 0.25, EXPOSED = 2;
 
 class Head implements Hittable {
   dead = false;
@@ -135,10 +138,12 @@ class Head implements Hittable {
     if (this.mode === 'dead') return [0, 0, 0, 0];
     return [this.x - 16, this.y - 14, this.x + 16 + 4, this.y + 12];
   }
+  get exposed() { return this.mode === 'stuck' || (this.mode === 'spit' && this.open > 0.6) || (this.mode === 'windup' && this.open > 0.6); }
   hit(dmg: number) {
     if (this.dead || this.invulnerable) return;
-    this.hp -= dmg; this.flashT = 4;
-    this.h.g.audio.sfx('hit');
+    const g = this.h.g;
+    if (this.exposed) { this.hp -= dmg * EXPOSED; this.flashT = 4; g.audio.sfx('hit'); }
+    else { this.hp -= dmg * ARMORED; this.flashT = 2; g.audio.sfx('clink', 0.35); }
     if (this.hp <= 0) this.kill();
   }
   kill() {
@@ -152,6 +157,9 @@ class Head implements Hittable {
   set(mode: HeadMode) { this.mode = mode; this.modeT = 0; }
   update() {
     const g = this.h.g;
+    // the last head standing is enraged: shorter tells and less rest between attacks
+    const rage = this.h.enraged;
+    const k = rage ? 0.65 : 1;
     this.modeT++;
     if (this.flashT > 0) this.flashT--;
     const [px, py] = g.player.center();
@@ -166,39 +174,47 @@ class Head implements Hittable {
       case 'idle':
         ease(this.restX + swayX, this.restY + swayY, 0.06);
         this.open = Math.max(0, this.open - 0.1);
-        if (--this.cooldown <= 0 && g.player.alive && this.h.busyHeads() < 2) {
-          const r = Math.random();
-          if (r < 0.45) this.set('windup'); else this.set('spit');
+        // one head attacks at a time, so there is always a gap to dodge and punish
+        if (--this.cooldown <= 0 && g.player.alive && this.h.busyHeads() < 1) {
+          if (Math.random() < 0.5) this.set('windup'); else this.set('spit');
         }
         break;
-      case 'windup': // rear back, eye flashes
+      case 'windup': // rear back with a flashing red eye; the bite spot locks in early
         ease(this.restX - this.facing * 22, this.restY - 26, 0.08);
-        this.targetX = px; this.targetY = Math.min(py, this.h.floorY - 22);
-        this.open = Math.min(0.5, this.open + 0.05);
-        if (this.modeT > 42) { this.set('lunge'); g.audio.sfx('bite'); }
+        if (this.modeT < 24 * k) {
+          this.targetX = Math.max(this.restX - 120, Math.min(this.restX + 120, px));
+          this.targetY = this.h.floorY - 14;
+        }
+        this.open = Math.min(0.5, this.open + 0.03 / k);
+        if (this.modeT > 60 * k) { this.set('lunge'); g.audio.sfx('bite'); }
         break;
       case 'lunge':
-        ease(this.targetX, this.targetY, 0.22);
+        ease(this.targetX, this.targetY, 0.25);
         this.open = 1;
-        if (this.modeT > 24) this.set('recover');
+        if (this.modeT > 14) { this.set('stuck'); g.gfx.shake = 4; g.audio.sfx('smallBoom', 0.5); }
+        break;
+      case 'stuck': // jaws caught in the rock: the moment to punish
+        this.x = this.targetX + Math.sin(this.modeT * 0.8) * 1.5;
+        this.open = 1;
+        if (this.modeT > 80 * k) this.set('recover');
         break;
       case 'recover':
         ease(this.restX, this.restY, 0.05);
         this.open = Math.max(0, this.open - 0.06);
-        if (this.modeT > 50) { this.set('idle'); this.cooldown = 90 + Math.random() * 80; }
+        if (this.modeT > 50 * k) { this.set('idle'); this.cooldown = (70 + Math.random() * 60) * k * k; }
         break;
-      case 'spit':
+      case 'spit': // mouth opens wide well before firing
         ease(this.restX + swayX * 0.3, this.restY - 10, 0.06);
-        this.open = Math.min(1, this.open + 0.08);
-        if (this.modeT === 30 || this.modeT === 48 || (this.idx === 1 && this.modeT === 66)) {
+        this.open = Math.min(1, this.open + 0.03 / k);
+        if (this.modeT === Math.round(50 * k) || ((this.idx === 1 || rage) && this.modeT === Math.round(80 * k))) {
           const mx = this.x + this.facing * 26, my = this.y + 6;
           const base = Math.atan2(py - my, px - mx);
-          for (const d of [-0.22, 0, 0.22]) {
-            g.eBullets.push(new EnemyBullet(g, mx, my, Math.cos(base + d) * 2.3, Math.sin(base + d) * 2.3, g.assets.fx.fireball, 3.5, 0, 300, false));
+          for (const d of [-0.38, 0, 0.38]) {
+            g.eBullets.push(new EnemyBullet(g, mx, my, Math.cos(base + d) * (rage ? 2.1 : 1.7), Math.sin(base + d) * (rage ? 2.1 : 1.7), g.assets.fx.fireball, 3.5, 0, 300, false));
           }
           g.audio.sfx('flame');
         }
-        if (this.modeT > 80) { this.set('idle'); this.cooldown = 100 + Math.random() * 80; }
+        if (this.modeT > 110 * k) { this.set('idle'); this.cooldown = (70 + Math.random() * 60) * k * k; }
         break;
       case 'dead':
         // the severed neck slumps and slides back under the lake
@@ -209,8 +225,8 @@ class Head implements Hittable {
         break;
     }
     if (this.mode !== 'dead') this.facing = px >= this.x ? 1 : -1;
-    // contact with the jaws kills
-    if ((this.mode === 'lunge' || this.mode === 'idle' || this.mode === 'recover' || this.mode === 'spit') && g.player.alive) {
+    // only the bite itself is deadly; a head stuck in the rock is safe to stand next to
+    if (this.mode === 'lunge' && g.player.alive) {
       const a = this.box(), b = g.player.box();
       if (a[0] + 4 < b[2] && a[2] - 4 > b[0] && a[1] + 4 < b[3] && a[3] - 4 > b[1]) g.player.hurt();
     }
@@ -230,7 +246,8 @@ class Head implements Hittable {
       const s = this.segs[i];
       s.x = x; s.y = y;
       s.scale = 1;
-      s.visible = y < this.h.waterY + 20 && !(this.mode === 'dead' && this.modeT > 130);
+      const submerged = (this.mode === 'emerge' || this.mode === 'dead') && y > this.h.waterY + 20;
+      s.visible = !submerged && !(this.mode === 'dead' && this.modeT > 130);
       s.opacity = this.mode === 'dead' ? Math.max(0, 1 - this.modeT / 130) : 1;
       const shade = 0.55 + 0.45 * t;
       s.setTint(shade, shade, shade);
@@ -239,10 +256,13 @@ class Head implements Hittable {
     const s = this.sprite;
     if (this.mode !== 'dead') s.setFrame(g.assets.hydra.head[this.open > 0.7 ? 2 : this.open > 0.25 ? 1 : 0]);
     s.flip = this.facing < 0;
-    s.flash = this.flashT > 0 ? 0.8 : this.mode === 'windup' && this.modeT % 8 < 4 ? 0.35 : 0;
-    s.setFlashColor(1, this.mode === 'windup' ? 0.3 : 1, this.mode === 'windup' ? 0.3 : 1);
+    if (this.h.enraged && this.mode !== 'dead') s.setTint(1, 0.62 + Math.sin(this.h.t / 6) * 0.12, 0.6); else s.setTint(1, 1, 1);
+    const warn = this.mode === 'windup' && this.modeT % (this.modeT > 30 ? 4 : 8) < 2;
+    s.flash = this.flashT > 0 ? (this.exposed ? 0.8 : 0.3) : warn ? 0.45 : 0;
+    s.setFlashColor(1, warn ? 0.3 : 1, warn ? 0.3 : 1);
     s.x = this.x; s.y = this.y;
-    s.visible = this.y < this.h.waterY + 30 && !(this.mode === 'dead' && this.modeT > 130);
+    const under = (this.mode === 'emerge' || this.mode === 'dead') && this.y > this.h.waterY + 30;
+    s.visible = !under && !(this.mode === 'dead' && this.modeT > 130);
     s.opacity = this.mode === 'dead' ? Math.max(0, 1 - this.modeT / 130) : 1;
     s.sync();
   }
@@ -251,11 +271,12 @@ class Head implements Hittable {
 
 class Claw implements Hittable {
   dead = false;
-  hp = 30;
+  hp = 20;
   sprite: Sprite;
   arm: Sprite;
+  shadow: Sprite;
   x: number; y: number;
-  mode: 'hidden' | 'rise' | 'track' | 'slam' | 'hold' | 'retreat' = 'hidden';
+  mode: 'hidden' | 'rise' | 'track' | 'aim' | 'slam' | 'hold' | 'retreat' = 'hidden';
   modeT = 0;
   flashT = 0;
   invulnerable = true;
@@ -264,6 +285,8 @@ class Claw implements Hittable {
     this.x = h.x + side * 120; this.y = h.floorY + 140;
     this.arm = g.gfx.sprite(g.assets.hydra.forearm, 49);
     this.sprite = g.gfx.sprite(g.assets.hydra.claw[0], 50);
+    this.shadow = g.gfx.sprite(g.assets.fx.ring[5], 13, true);
+    this.shadow.visible = false;
   }
   box(): [number, number, number, number] {
     if (this.mode === 'hidden') return [0, 0, 0, 0];
@@ -287,7 +310,7 @@ class Claw implements Hittable {
     if (this.flashT > 0) this.flashT--;
     const [px] = g.player.center();
     const floor = this.h.floorY;
-    this.invulnerable = this.mode === 'hidden' || this.mode === 'retreat';
+    this.invulnerable = this.mode !== 'hold';
     switch (this.mode) {
       case 'hidden': this.y = floor + 140; break;
       case 'rise':
@@ -298,7 +321,11 @@ class Claw implements Hittable {
       case 'track':
         this.x += (px - this.x) * 0.06;
         this.y = floor - 110 + Math.sin(this.modeT / 4) * 2;
-        if (this.modeT > 55) { this.set('slam'); }
+        if (this.modeT > 40) this.set('aim');
+        break;
+      case 'aim': // locked in place and flashing: move out from under it
+        this.y = floor - 118 - Math.min(10, this.modeT / 2);
+        if (this.modeT > 36) this.set('slam');
         break;
       case 'slam':
         this.y += 9;
@@ -308,8 +335,8 @@ class Claw implements Hittable {
           for (let i = -2; i <= 2; i++) g.addFx(new Anim(g, g.assets.fx.puff, this.x + i * 14, floor - 4, 5, 45));
         }
         break;
-      case 'hold':
-        if (this.modeT > 50) this.set('retreat');
+      case 'hold': // pinned to the ledge and open to fire
+        if (this.modeT > 70) this.set('retreat');
         break;
       case 'retreat':
         this.y += 4;
@@ -326,22 +353,31 @@ class Claw implements Hittable {
     const g = this.h.g;
     const s = this.sprite;
     s.setFrame(g.assets.hydra.claw[this.mode === 'slam' || this.mode === 'hold' ? 1 : 0]);
-    s.flash = this.flashT > 0 ? 0.8 : this.mode === 'track' && this.modeT % 10 < 5 ? 0.3 : 0;
+    s.flash = this.flashT > 0 ? 0.8 : this.mode === 'aim' && this.modeT % 6 < 3 ? 0.45 : 0;
+    s.setFlashColor(1, this.mode === 'aim' && this.flashT <= 0 ? 0.3 : 1, this.mode === 'aim' && this.flashT <= 0 ? 0.3 : 1);
+    // a marker on the ledge shows where the claw will land
+    const sh = this.shadow;
+    sh.visible = this.mode === 'track' || this.mode === 'aim';
+    sh.setFrame(g.assets.fx.ring[this.mode === 'aim' ? 2 + (Math.floor(this.modeT / 3) % 2) : 4]);
+    sh.scale = 1;
+    sh.x = this.x; sh.y = this.h.floorY - 6; sh.sync();
     s.flip = this.side > 0;
     s.x = this.x; s.y = this.y; s.sync();
     this.arm.x = this.x + this.side * 4; this.arm.y = this.y + 10; this.arm.sync();
     s.visible = this.arm.visible = this.mode !== 'hidden';
   }
-  destroy() { this.sprite.remove(); this.arm.remove(); }
+  destroy() { this.sprite.remove(); this.arm.remove(); this.shadow.remove(); }
 }
 
 class Core implements Hittable {
   dead = false;
-  hp = 120;
+  hp = 50;
   invulnerable = true;
   flashT = 0;
   constructor(public h: Hydra) {}
   box(): [number, number, number, number] {
+    // the chest plate is scenery until it opens: shots pass straight through it
+    if (this.invulnerable) return [0, 0, 0, 0];
     const x = this.h.x, y = this.h.y - 88;
     return [x - 16, y - 14, x + 16, y + 14];
   }
@@ -369,6 +405,7 @@ export class Hydra {
   phase: 'rise' | 'heads' | 'transition' | 'core' | 'dying' = 'rise';
   phaseT = 0;
   shellOpen = 0;
+  enraged = false;
   constructor(public g: Game, cx: number, waterY: number, floorY: number) {
     this.x = cx; this.waterY = waterY; this.floorY = floorY;
     this.baseY = waterY + 70;
@@ -383,9 +420,9 @@ export class Hydra {
     this.core = new Core(this);
     const L = cx - VW / 2;
     this.heads = [
-      new Head(this, 0, -96, -110, L + 70, floorY - 112, 55),
-      new Head(this, 1, 0, -170, L + VW / 2, floorY - 140, 65),
-      new Head(this, 2, 96, -110, L + VW - 70, floorY - 112, 55),
+      new Head(this, 0, -96, -110, L + 70, floorY - 112, 18),
+      new Head(this, 1, 0, -170, L + VW / 2, floorY - 140, 22),
+      new Head(this, 2, 96, -110, L + VW - 70, floorY - 112, 18),
     ];
     this.claws = [new Claw(this, -1), new Claw(this, 1)];
     g.audio.sfx('rumble');
@@ -395,7 +432,7 @@ export class Hydra {
   totalHp() {
     return this.heads.reduce((a, h) => a + Math.max(0, h.hp), 0) + Math.max(0, this.core.hp);
   }
-  maxHp() { return 55 + 65 + 55 + 120; }
+  maxHp() { return 18 + 22 + 18 + 50; }
   update() {
     const g = this.g;
     this.t++; this.phaseT++;
@@ -405,12 +442,18 @@ export class Hydra {
         if (this.phaseT % 20 === 0) splash(g, this.x + (Math.random() - 0.5) * 300, this.waterY + 4);
         if (this.phaseT === 60) g.audio.sfx('roar');
         g.gfx.shake = Math.max(g.gfx.shake, 1.5);
-        if (this.phaseT > 170) { this.phase = 'heads'; this.phaseT = 0; }
+        if (this.phaseT > 170) { this.phase = 'heads'; this.phaseT = 0; g.banner = { text: 'SHOOT THE OPEN MOUTHS', t: 100 }; }
         break;
       case 'heads':
         this.y = this.baseY + Math.sin(this.t / 50) * 3;
+        if (!this.enraged && this.heads.filter((h) => !h.dead).length === 1) {
+          this.enraged = true;
+          g.audio.sfx('roar');
+          g.gfx.shake = 5;
+          g.banner = { text: 'ENRAGED!', t: 120 };
+        }
         if (this.heads.every((h) => h.dead) && this.phaseT > 10) {
-          this.phase = 'transition'; this.phaseT = 0;
+          this.phase = 'transition'; this.phaseT = 0; this.enraged = false;
           g.audio.sfx('roar');
         }
         break;
@@ -418,18 +461,18 @@ export class Hydra {
         this.y = this.baseY + Math.sin(this.t / 50) * 3;
         this.shellOpen = Math.min(1, this.phaseT / 80);
         g.gfx.shake = Math.max(g.gfx.shake, 2);
-        if (this.phaseT > 100) { this.phase = 'core'; this.phaseT = 0; this.core.invulnerable = false; }
+        if (this.phaseT > 100) { this.phase = 'core'; this.phaseT = 0; this.core.invulnerable = false; g.banner = { text: 'SHOOT THE CORE', sub: 'CLAWS ARE OPEN TO FIRE AFTER THEY SLAM', t: 60 }; }
         break;
       case 'core': {
         this.y = this.baseY + Math.sin(this.t / 40) * 4;
         // alternate claw slams
         const active = this.claws.filter((c) => !c.dead);
-        if (active.length && this.phaseT % 170 === 20) {
-          const c = active[Math.floor(this.phaseT / 170) % active.length];
+        if (active.length && this.phaseT % 290 === 20) {
+          const c = active[Math.floor(this.phaseT / 290) % active.length];
           if (c.mode === 'hidden') c.set('rise');
         }
         // core spits arcing globs
-        if (this.phaseT % 120 === 60 && g.player.alive) {
+        if (this.phaseT % 290 === 200 && g.player.alive) {
           const cx = this.x, cy = this.y - 88;
           for (let i = 0; i < 3; i++) {
             const vx = (Math.random() - 0.5) * 4, vy = -3.5 - Math.random();
@@ -437,7 +480,7 @@ export class Hydra {
           }
           g.audio.sfx('hiss');
         }
-        if (this.phaseT % 200 === 140) for (let i = 0; i < 8; i++) shoot(g, this.x, this.y - 88, Math.PI * (0.1 + i * 0.115), 1.7);
+        if (this.phaseT % 290 === 250) for (let i = 0; i < 6; i++) shoot(g, this.x, this.y - 88, Math.PI * (0.12 + i * 0.152), 1.5);
         break;
       }
       case 'dying':
