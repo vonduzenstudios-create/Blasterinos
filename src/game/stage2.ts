@@ -282,7 +282,7 @@ function buildSpawns(): Spawn[] {
     { kind: 'drone', x: px(584), y: py(GROUND - 6), arg: -1 },
     { kind: 'rifleBag', x: px(589), y: FLOOR },
     { kind: 'turret', x: px(598), y: py(GROUND - 4) },
-    { kind: 'capsule', x: px(602), y: py(GROUND - 8), arg: 'S' },
+    { kind: 'capsule', x: px(602), y: py(GROUND - 8), arg: 'C' },
     { kind: 'burrower', x: px(620), y: FLOOR },
     { kind: 'rifle', x: px(625), y: py(GROUND - 3) },
     { kind: 'sniper', x: px(635), y: py(GROUND - 11) },

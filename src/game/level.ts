@@ -119,7 +119,7 @@ export function buildSpawns(): Spawn[] {
     { kind: 'crawler', x: 254 * TS - 8, y: py(38), arg: 1 },
     { kind: 'drone', x: px(236), y: py(34), arg: 1 },
     { kind: 'rifle', x: px(250), y: py(30) },
-    { kind: 'capsule', x: px(236), y: py(26), arg: 'S' },
+    { kind: 'capsule', x: px(236), y: py(26), arg: 'C' },
     { kind: 'crawler', x: 234 * TS + 8, y: py(22), arg: -1 },
     { kind: 'sniper', x: px(248), y: py(21) },
     { kind: 'drone', x: px(250), y: py(19), arg: -1 },

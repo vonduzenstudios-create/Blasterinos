@@ -177,6 +177,7 @@ function buildSpawns(): Spawn[] {
     hole(129 * TS + 8, py(6), 'down'),
     hole(134 * TS + 8, py(12), 'up'),
     { kind: 'capsule', x: px(138), y: py(7), arg: 'L' },
+    { kind: 'capsule', x: px(160), y: py(7), arg: 'C' },
     { kind: 'pustule', x: px(140), y: FLOOR },
     { kind: 'leaper', x: px(143), y: py(9) },
     hole(146 * TS, py(11) + 6, 'left'),

@@ -182,6 +182,7 @@ function buildSpawns(): Spawn[] {
     { kind: 'sniper', x: px(134), y: py(GROUND - TOWER_DECK / TS) },
     { kind: 'crab', x: px(138), y: FLOOR },
     { kind: 'capsule', x: px(140), y: py(GROUND - 8), arg: 'L' },
+    { kind: 'capsule', x: px(166), y: py(GROUND - 8), arg: 'C' },
     { kind: 'drone', x: px(146), y: py(GROUND - 6), arg: -1 },
     { kind: 'runners', x: px(110), y: FLOOR, arg: [px(110), px(150), 110] },
     // the reef
