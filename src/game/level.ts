@@ -16,7 +16,8 @@ export const JUNGLE_CAM_Y = MAP_H * TS - VH;
 export const ARENA_FLOOR = 12 * TS;
 export const LAKE_Y = 150;
 
-export type SpawnKind = 'runners' | 'rifle' | 'rifleBag' | 'sniper' | 'turret' | 'leaper' | 'drone' | 'capsule' | 'crawler';
+export type SpawnKind = 'runners' | 'rifle' | 'rifleBag' | 'sniper' | 'turret' | 'leaper' | 'drone' | 'capsule' | 'crawler'
+  | 'biker' | 'tower' | 'burrower';
 export interface Spawn { kind: SpawnKind; x: number; y: number; arg?: any; done?: boolean; }
 
 export function buildWorld(): World {

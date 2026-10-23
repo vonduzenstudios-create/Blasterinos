@@ -112,7 +112,7 @@ export class Audio {
     if (!ctx || this.muted) return;
     const now = ctx.currentTime;
     // Rate limit identical sounds so rapid fire doesn't turn into mush.
-    const minGap: Record<string, number> = { hit: 0.04, shot: 0.05, enemyShot: 0.06, flame: 0.07, smallBoom: 0.03 };
+    const minGap: Record<string, number> = { hit: 0.04, shot: 0.05, enemyShot: 0.06, flame: 0.07, smallBoom: 0.03, heli: 0.08, engine: 0.1 };
     if (minGap[name] && now - (this.lastSfx[name] ?? 0) < minGap[name]) return;
     this.lastSfx[name] = now;
     const out = this.sfxBus;
@@ -237,6 +237,22 @@ export class Audio {
       case 'rumble':
         this.noise(t, 1.5, 0.35 * v, out, 'lowpass', 300, 80, 1);
         this.osc('sine', 50, 35, t, 1.5, 0.3 * v, out, 0.3);
+        break;
+      case 'engine': // jeep motor putter
+        this.osc('sawtooth', 62, 55, t, 0.12, 0.07 * v, out, 0.01);
+        this.noise(t, 0.08, 0.05 * v, out, 'lowpass', 400, 200);
+        break;
+      case 'heli': // rotor chop
+        this.noise(t, 0.07, 0.18 * v, out, 'bandpass', 260, 160, 2.5);
+        break;
+      case 'crash':
+        this.noise(t, 0.7, 0.5 * v, out, 'bandpass', 2500, 400, 1.5);
+        this.osc('square', 220, 60, t, 0.5, 0.16 * v, out);
+        for (let i = 0; i < 4; i++) this.osc('square', 1800 - i * 300, 1500 - i * 300, t + 0.05 + i * 0.06, 0.05, 0.08 * v, out);
+        break;
+      case 'gulp': // the worm peeling open
+        this.osc('sine', 300, 90, t, 0.25, 0.25 * v, out);
+        this.noise(t, 0.3, 0.2 * v, out, 'bandpass', 600, 250, 3);
         break;
     }
   }

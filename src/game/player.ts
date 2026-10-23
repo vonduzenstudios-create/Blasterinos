@@ -151,11 +151,19 @@ export class Player {
     }
     if (b.vy >= 0) this.jumpHeld = false;
     b.vy = Math.min(MAXFALL, b.vy + GRAV);
-    // keep inside the camera's left/right edges
+    const prevY = b.y;
+    b.x += g.scrollVx; // carried along by the jeep ride
     g.world.move(b);
+    // keep inside the camera's left/right edges
     const minX = g.gfx.camX + 6, maxX = g.gfx.camX + VW - 6;
     if (b.x < minX) b.x = minX;
     if (b.x > maxX) b.x = maxX;
+    // riding a vehicle: its deck is the floor and you can't step off it
+    const deck = g.stage.deck();
+    if (deck) {
+      b.x = Math.max(deck.x0, Math.min(deck.x1, b.x));
+      if (b.vy >= 0 && prevY <= deck.y + 6 && b.y >= deck.y - 0.5) { b.y = deck.y; b.vy = 0; b.onGround = true; }
+    }
     if (b.onGround) {
       if (!this.wasGround) { this.curl = false; g.audio.sfx('land', 0.6); }
       this.safeT++;
@@ -311,6 +319,7 @@ export class Player {
     const b = this.body, g = this.g;
     if (this.state === 'dying') {
       b.vy = Math.min(MAXFALL, b.vy + GRAV);
+      b.x += g.scrollVx * 0.5; // thrown off a moving jeep you tumble behind it
       g.world.move(b);
       if (b.onGround && this.stateT > 10) { b.vx = 0; this.state = 'dead'; this.stateT = 0; }
       if (b.y > g.gfx.camY + VH + 40) { this.state = 'dead'; this.stateT = 0; }

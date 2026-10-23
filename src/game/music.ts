@@ -117,6 +117,66 @@ export const BOSS_SONG = song(172, true, [
   },
 ]);
 
+// ---------------- Stage 2: "Scorched Dunes" ----------------
+// E phrygian dominant over a galloping bass: the snake-charmer scale, played fast.
+const desertChords: Chord[] = [
+  ['E', 'M'], ['F', 'M'], ['E', 'M'], ['D', 'm'], ['C', 'M'], ['D', 'm'], ['E', 'M'], ['E', '7'],
+  ['A', 'm'], ['G', 'M'], ['F', 'M'], ['E', 'M'], ['A', 'm'], ['G', 'M'], ['F', 'M'], ['E', '7'],
+];
+const desertLead = `
+E5 . F5 . G#5 . . . F5 . E5 . . . B4 .
+C5 . . . A4 . C5 . F5 . . . E5 . C5 .
+B4 . . . G#4 . B4 . E5 . F5 . G#5 . . .
+A5 . . . F5 . D5 . F5 . E5 . D5 . . .
+E5 . . . C5 . E5 . G5 . . . F5 . E5 .
+F5 . . . D5 . F5 . A5 . . . G#5 . F5 .
+G#5 . . . . . E5 . B5 . . . A5 . G#5 .
+B5 . . . . . . . . . . . - - - -
+A5 . . . E5 . A5 . C6 . . . B5 . A5 .
+B5 . . . G5 . D5 . G5 . . . F5 . D5 .
+C6 . . . A5 . F5 . A5 . C6 . B5 . A5 .
+G#5 . . . E5 . . . B4 . . . E5 . F5 .
+E5 . A5 . C6 . A5 . E6 . . . D6 . C6 .
+D6 . B5 . G5 . B5 . D6 . . . C6 . B5 .
+C6 . . . A5 . . . F5 . . . A5 . C6 .
+B5 . . . G#5 . . . E5 . . . - - - -`;
+const gallop = [0, -1, 0, 0, 12, -1, 0, 0, 7, -1, 0, 0, 10, -1, 12, 0];
+export const DESERT_SONG = song(162, true, [
+  { inst: 'lead', vol: 0.19, notes: desertLead },
+  { inst: 'lead2', vol: 0.06, notes: desertLead.replace(/([A-G]#?)(\d)/g, (_, n, o) => n + (parseInt(o) - 1)) },
+  { inst: 'bass', vol: 0.34, notes: bassLine(desertChords, gallop) },
+  { inst: 'arp', vol: 0.045, notes: arpLine(desertChords, 5, 2) },
+  {
+    inst: 'drums', vol: 0.9, drum: drums(16,
+      ['k', 'h', 'h', 'k', 's', 'h', 'h', 'k', 'k', 'h', 'h', 'k', 's', 'h', 'k', 'h'],
+      ['k', 'h', 'h', 'k', 's', 'h', 'h', 'k', 's', 's', 't', 's', 't', 't', 'ss', 's']),
+  },
+]);
+
+// ---------------- Boss: "The Great Dune Worm" ----------------
+const wormChords: Chord[] = [['D', 'm'], ['D#', 'M'], ['D', 'm'], ['C', 'M'], ['D', 'm'], ['D#', 'M'], ['A#', 'M'], ['A', 'M']];
+const wormLead = `
+D5 . . . A4 . D5 . F5 . E5 . D5 . A4 .
+D#5 . . . G5 . . . A#5 . G5 . D#5 . D5 .
+F5 . . . D5 . F5 . A5 . . . G5 . F5 .
+E5 . . . C5 . E5 . G5 . . . F5 . E5 .
+D6 . . . . . A5 . . . F5 . . . D5 .
+D#5 . F5 . G5 . A#5 . D#6 . D6 . A#5 . G5 .
+F5 . . . A#5 . . . D6 . . . A#5 . . .
+C#6 . . . . . . . A5 . G5 . E5 . C#5 .`;
+const wormBass = [0, 0, 12, 0, 1, 0, 12, 0, 0, 0, 12, 0, 1, 12, 7, 1];
+export const WORM_SONG = song(176, true, [
+  { inst: 'lead', vol: 0.19, notes: wormLead },
+  { inst: 'lead2', vol: 0.07, notes: wormLead.replace(/([A-G]#?)(\d)/g, (_, n, o) => n + (parseInt(o) - 1)) },
+  { inst: 'bass', vol: 0.37, notes: bassLine(wormChords, wormBass) },
+  { inst: 'arp', vol: 0.045, notes: arpLine(wormChords, 4) },
+  {
+    inst: 'drums', vol: 1, drum: drums(8,
+      ['k', 'h', 'k', 'h', 's', 'h', 'k', 'k', 'k', 'h', 'k', 'h', 's', 'h', 'k', 'h'],
+      ['k', 'h', 'k', 'h', 's', 'h', 'k', 'h', 's', 't', 's', 't', 's', 's', 'ss', 's'], 4, 4),
+  },
+]);
+
 // ---------------- Title ----------------
 const titleChords: Chord[] = [['E', 'm'], ['C', 'M'], ['G', 'M'], ['D', 'M'], ['E', 'm'], ['C', 'M'], ['D', 'M'], ['B', 'M']];
 const titleLead = `

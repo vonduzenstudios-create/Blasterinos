@@ -4,6 +4,7 @@ import { buildFx } from './art/fx';
 import { buildEnemyArt } from './art/enemies';
 import { buildProps } from './art/props';
 import { buildHydra } from './art/hydra';
+import { buildDesert } from './art/desert';
 import { showSheet } from './sheet';
 
 export function run() {
@@ -21,5 +22,11 @@ export function run() {
   groups.push(['props', [...pr.tree, ...pr.bush, pr.pillar, pr.statue, pr.vine, pr.skulls]]);
   const hy = buildHydra();
   groups.push(['hydra', [hy.body, ...hy.head, hy.neck, hy.neckBelly, hy.stump, ...hy.claw, hy.forearm, ...hy.core, hy.coreShell]]);
+  const d = buildDesert();
+  const asFrame = (c: HTMLCanvasElement) => ({ canvas: c, w: c.width, h: c.height, ax: 0, ay: 0 });
+  groups.push(['desert backdrops', [asFrame(d.sky), asFrame(d.mesas), asFrame(d.dunes), asFrame(d.near)]]);
+  groups.push(['desert props', [...d.cactus, d.ribs, d.skull, d.sign, d.wreck, d.barrel, d.tower, ...d.boulder]]);
+  groups.push(['vehicles', [...d.jeep, d.jeepWreck, d.driver, ...d.bike, d.heli, d.heliWreck, ...d.heliRotor, ...d.bomb, ...d.sandball]]);
+  groups.push(['sandworm', [...d.wormSeg, ...d.wormHead, d.mound, ...d.ripple, ...d.larva]]);
   showSheet(groups);
 }
