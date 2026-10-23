@@ -6,6 +6,7 @@ import { buildProps } from './art/props';
 import { buildHydra } from './art/hydra';
 import { buildDesert } from './art/desert';
 import { buildBeach } from './art/beach';
+import { buildSnow } from './art/snow';
 import { buildHive } from './art/hive';
 import { showSheet } from './sheet';
 
@@ -34,6 +35,11 @@ export function run() {
   groups.push(['beach backdrops', [asFrame(b.sky), asFrame(b.islands)]]);
   groups.push(['beach props', [...b.palm, b.hedgehog, b.tower, b.boat, b.piling, b.starfish, b.shells, b.grass, b.crate]]);
   groups.push(['giant clam', [b.shell, ...b.lips, ...b.pearl, b.bigPearl, ...b.geyser, ...b.bubbles, ...b.crab, b.crabEyes, ...b.fish]]);
+  const sn = buildSnow();
+  groups.push(['snow backdrops', [asFrame(sn.sky), asFrame(sn.peaks), asFrame(sn.firs), asFrame(sn.near)]]);
+  groups.push(['snow props', [...sn.pine, sn.rock, sn.cane, sn.pole, sn.lamp, sn.pile, sn.workshop, ...sn.thinIce]]);
+  groups.push(['snow foes', [...sn.snowman, ...sn.snowball, sn.bigball, ...sn.puff, ...sn.wave, ...sn.skier, sn.skierAir]]);
+  groups.push(['santa', [...sn.santa.stand, ...sn.santa.walk, sn.santa.crouch, sn.santa.air, sn.santa.laugh, sn.santa.down, sn.arm, ...sn.sack, ...sn.present, sn.shadow]]);
   const hv = buildHive();
   groups.push(['hive backdrops', [asFrame(hv.sky), asFrame(hv.far), asFrame(hv.near)]]);
   groups.push(['hive props', [...hv.pod, hv.tendril, hv.eggCluster, hv.bones, ...hv.pustule, ...hv.egg, ...hv.gas]]);

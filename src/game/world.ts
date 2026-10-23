@@ -40,8 +40,11 @@ export class World {
   fill(x0: number, y0: number, x1: number, y1: number, t: number) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) this.set(x, y, t);
   }
-  solid(tx: number, ty: number) { return SOLID.has(this.get(tx, ty)); }
-  oneway(tx: number, ty: number) { return ONEWAY.has(this.get(tx, ty)); }
+  /** Which tile ids block and which are one-way. A stage with its own tile set overrides these. */
+  solidT(t: number) { return SOLID.has(t); }
+  onewayT(t: number) { return ONEWAY.has(t); }
+  solid(tx: number, ty: number) { return this.solidT(this.get(tx, ty)); }
+  oneway(tx: number, ty: number) { return this.onewayT(this.get(tx, ty)); }
   solidAtPx(px: number, py: number) { return this.solid(Math.floor(px / TS), Math.floor(py / TS)); }
   /** Anything a bullet or the grappling hook stops on. */
   blocksAtPx(px: number, py: number, includeOneway = false) {
@@ -86,8 +89,8 @@ export class World {
       for (let tx = Math.floor(l / TS); tx <= Math.floor(r / TS); tx++) {
         const t = this.get(tx, ty);
         const top = ty * TS;
-        if (SOLID.has(t) || (ONEWAY.has(t) && b.dropTimer <= 0 && prevBottom <= top + 0.5)) {
-          if (SOLID.has(t) && prevBottom > top + 8) continue; // deep inside a wall: let horizontal resolve it
+        if (this.solidT(t) || (this.onewayT(t) && b.dropTimer <= 0 && prevBottom <= top + 0.5)) {
+          if (this.solidT(t) && prevBottom > top + 8) continue; // deep inside a wall: let horizontal resolve it
           b.y = top; b.vy = 0; b.onGround = true;
           break;
         }

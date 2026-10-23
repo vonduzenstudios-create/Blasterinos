@@ -15,12 +15,13 @@ import type { Stage } from './stage';
 import { Stage1 } from './stage1';
 import { Stage2 } from './stage2';
 import { Stage3 } from './stage3';
+import { Stage4 } from './stage4';
 import { Stage5 } from './stage5';
 import { Ending } from './ending';
 import type { Weapon } from './weapons';
 
 type Mode = 'title' | 'select' | 'intro' | 'play' | 'paused' | 'gameover' | 'clear' | 'ending';
-const STAGES = [Stage1, Stage2, Stage3, Stage5];
+const STAGES = [Stage1, Stage2, Stage3, Stage4, Stage5];
 
 interface Updatable { dead: boolean; update(): void; destroy(): void; }
 interface FloatText { text: string; x: number; y: number; t: number; }

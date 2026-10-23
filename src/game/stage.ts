@@ -1,6 +1,7 @@
 import type { Song } from '../engine/audio';
 import type { Hittable } from './weapons';
 import type { Spawn } from './level';
+import type { Body } from './world';
 
 /** A moving platform the player rides on (the stage 2 jeep). */
 export interface Deck { x0: number; x1: number; y: number; }
@@ -34,6 +35,8 @@ export interface Stage {
   spawn(s: Spawn): boolean;
   /** The platform the player is riding, if any. */
   deck(): Deck | null;
+  /** Footing under a body standing on the ground: 1 is normal, lower is slippery. */
+  grip?(b: Body): number;
   /** Custom drop-in after a death. Returns false to use the default. */
   respawn(): boolean;
   onMidBossDefeated(): void;
