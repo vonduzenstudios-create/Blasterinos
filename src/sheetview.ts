@@ -12,9 +12,9 @@ import { showSheet } from './sheet';
 
 export function run() {
   const groups: [string, any[]][] = [];
-  for (const k of ['ryder', 'voss']) {
+  for (const k of ['ryder', 'voss', 'vossBare']) {
     const h = buildHero(LOOKS[k]);
-    groups.push([k, [...Object.values(h.stand), ...Object.values(h.air), ...h.run.f, h.prone, ...h.curl, h.hang, h.hurt, h.dead]]);
+    groups.push([k, [...Object.values(h.stand), ...Object.values(h.air), ...h.run.f, h.prone, ...h.curl, h.hang, h.hurt, h.dead, ...h.bits]]);
   }
   const fx = buildFx();
   groups.push(['fx', [...fx.boomM, ...Object.values(fx.bullet).flat(), ...fx.enemyBullet, ...fx.spit, ...fx.flash, ...fx.splash, fx.hook, ...Object.values(fx.falcon).map((f) => f[0]), ...fx.capsule, ...fx.crush, ...fx.crush2]]);
