@@ -82,7 +82,9 @@ export class SnowWorld extends World {
     return isFinite(a) && isFinite(b) ? (b - a) / 8 : 0;
   }
   isIcy(x: number) { const i = Math.floor(x); return i >= 0 && i < this.icy.length && this.icy[i] === 1; }
-  solidT(t: number) { return t === ST.FILL || t === ST.ROCK || t === ST.ICE; }
+  /** Set while moving a body: the fill under the snow is left to the surface, so slopes never snag. */
+  private skipFill = false;
+  solidT(t: number) { return (t === ST.FILL && !this.skipFill) || t === ST.ROCK || t === ST.ICE; }
   onewayT(t: number) { return t === ST.FLOE || t === ST.LOG; }
   solidAtPx(px: number, py: number) { return super.solidAtPx(px, py) || py > this.surf(px) + 1; }
   blocksAtPx(px: number, py: number, includeOneway = false) { return super.blocksAtPx(px, py, includeOneway) || py > this.surf(px) + 1; }
@@ -93,7 +95,11 @@ export class SnowWorld extends World {
   }
   move(b: Body) {
     const wasGround = b.onGround, x0 = b.x, y0 = b.y;
+    // the fill tiles only roughly follow the slope (whole tiles under a smooth surface), so
+    // their corners poke up and catch you walking uphill; the surface itself does the work
+    this.skipFill = true;
     super.move(b);
+    this.skipFill = false;
     if (b.vy >= 0 && b.dropTimer <= 0) for (const p of this.plats) {
       if (p.on && b.x >= p.x0 && b.x <= p.x1 && y0 <= p.y + 0.5 && b.y >= p.y) { b.y = p.y; b.vy = 0; b.onGround = true; }
     }
@@ -141,6 +147,8 @@ export class Stage4 implements Stage {
   readonly clearLines = ['THE OUTPOST HAS FALLEN. THE PASS IS OPEN.'];
   camMode: CamMode = 'scroll';
   lockT = 0;
+  /** Where the player's feet last touched down: the camera follows this, not each jump. */
+  footY = 0;
   boss: Walker | null = null;
 
   constructor(public g: Game) {}
@@ -162,7 +170,8 @@ export class Stage4 implements Stage {
     this.camMode = 'scroll'; this.lockT = 0; this.boss = null;
     g.gfx.camX = cp === 0 ? 0 : cp === 1 ? CP1_CAM : ARENA_X - 60;
     const sx = cp === 0 ? 3 * TS : g.gfx.camX + 70;
-    g.gfx.camY = Math.max(0, Math.min(MAX_CAM_Y, w.surf(sx) - 148));
+    this.footY = w.surf(sx);
+    g.gfx.camY = Math.max(0, Math.min(MAX_CAM_Y, this.footY - 148));
     if (cp > 0) for (const s of g.spawns) if (s.x < g.gfx.camX + VW) s.done = true;
   }
 
@@ -176,8 +185,12 @@ export class Stage4 implements Stage {
     if (this.camMode === 'scroll') {
       const target = Math.min(p.body.x - 150, ARENA_X);
       if (target > gx.camX) gx.camX = Math.min(target, gx.camX + 4);
-      // the view rides up and down the hills with you
-      const ty = Math.max(0, Math.min(MAX_CAM_Y, p.body.y - 148));
+      // the view rides the hills with your footing; a jump on its own doesn't move it,
+      // but a drop below the last foothold (or a climb far above it) does
+      const b = p.body;
+      if (b.onGround || b.y > this.footY) this.footY = b.y;
+      else this.footY = Math.min(this.footY, b.y + 100);
+      const ty = Math.max(0, Math.min(MAX_CAM_Y, this.footY - 148));
       gx.camY += Math.max(-4, Math.min(4, (ty - gx.camY) * 0.12));
       if (gx.camX >= CP1_CAM) g.checkpoint = Math.max(g.checkpoint, 1);
       if (gx.camX >= ARENA_X) {
