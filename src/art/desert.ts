@@ -451,9 +451,9 @@ function sandball(k: number): Frame {
 
 // ---------------------------------------------------------------- the sandworm
 
-// Ruddy, ridged and blunt-ended. Any resemblance is entirely coincidental.
+// Ruddy and ridged, with a beak of overlapping armour plates.
 const FLESH = [rgb('#3e161c'), rgb('#6a2a2e'), rgb('#985044'), rgb('#c47a62'), rgb('#e2a486'), rgb('#f8ccae')];
-const DOME = [rgb('#4a1424'), rgb('#7a2638'), rgb('#ac4a54'), rgb('#d27272'), rgb('#eca094'), rgb('#ffd0c0')];
+const DOME = [rgb('#2e1e14'), rgb('#4e3420'), rgb('#76522e'), rgb('#a07a46'), rgb('#c8a466'), rgb('#ecd29a')];
 const VEIN = rgb('#6a2a5a');
 const MAW = [rgb('#2a0410'), rgb('#6a0a20'), rgb('#b02038'), rgb('#e85060')];
 const TOOTH: Ramp = ramp('#9a9078', '#f0e8d0', '#ffffff');
@@ -487,23 +487,27 @@ function wormHead(open: number): Frame {
     for (let y = 36; y < H; y++) { const hw = 19 - Math.max(0, (y - 64)) * 0.6; for (let x = Math.ceil(cx - hw); x <= cx + hw; x++) p.set(x, y, FLESH[3], id); }
   };
   if (open === 0) {
-    // the shaft runs straight up to a flared collar under a smooth rounded dome
+    // a tapering beak of three stacked armour plates, split by a three-way seam
     const neck = p.newPart();
     neckShape(neck);
     p.volume(neck, FLESH, { flat: 0.9, pattern: (x, y) => (Math.abs(y - 60) < 1.2 ? -1 : 0) });
-    const dome = p.newPart();
-    p.ellipse(cx, 24, 21, 22, DOME[3], dome);
-    p.ellipse(cx, 37, 24, 6, DOME[3], dome); // the flared collar
-    p.volume(dome, DOME, { flat: 0.75 });
-    // shadow tucked under the collar, a sheen on top
-    for (let x = cx - 24; x <= cx + 24; x++) { const y = 43 + Math.round(Math.abs(x - cx) * 0.08); p.over(x, y, FLESH[0]); p.over(x, y + 1, FLESH[1]); }
-    for (let i = 0; i < 8; i++) p.over(cx - 11 + i, 8 + Math.round(Math.abs(i - 4) * 0.5), DOME[5]);
-    p.over(cx - 12, 10, DOME[5]); p.over(cx - 13, 12, DOME[4]);
-    // a little slit at the tip
-    for (let y = 2; y < 10; y++) p.over(cx, y, DOME[0]);
-    p.over(cx + 1, 5, DOME[1]); p.over(cx + 1, 6, DOME[1]);
+    const plates: [number, number, number, number][] = [[54, 22, 40, 19], [42, 19, 24, 15], [28, 15, 6, 6]];
+    for (const [yb, wb, yt, wt] of plates) {
+      const id = p.newPart();
+      p.poly([[cx - wb, yb], [cx + wb, yb], [cx + wt, yt], [cx - wt, yt]], DOME[3], id);
+      p.ellipse(cx, yt, wt, 3, DOME[3], id);
+      p.volume(id, DOME, { flat: 0.6 });
+      // dark lip where the plate overlaps the one below it
+      for (let x = Math.ceil(cx - wb); x <= cx + wb; x++) { p.over(x, yb, DOME[0]); p.over(x, yb - 1, DOME[1]); }
+    }
+    // ridge ticks along each plate, and grit in the seams
+    for (let i = -2; i <= 2; i++) for (const [yb, wb] of [[50, 18], [38, 14], [24, 10]]) p.over(cx + i * wb / 2.5, yb - 2, DOME[2]);
+    // the closed mouth: a three-way seam meeting near the tip
+    for (let y = 8; y < 30; y++) p.over(cx, y, DOME[0]);
+    for (let i = 0; i < 9; i++) { p.over(cx - 1 - i, 8 + i * 1.6, DOME[0]); p.over(cx + 1 + i, 8 + i * 1.6, DOME[0]); }
+    p.over(cx - 6, 6, DOME[5]); p.over(cx - 7, 8, DOME[5]); p.over(cx - 12, 22, DOME[4]); p.over(cx - 14, 34, DOME[4]);
   } else {
-    // the "dome" was four petals all along, now peeled back around a ring of teeth
+    // the beak plates split into four petals, now peeled back around a ring of teeth
     const spread = open === 1 ? 0.45 : 1;
     const neck = p.newPart();
     neckShape(neck);
