@@ -7,18 +7,18 @@ import { explode, Anim } from './effects';
 import { dust } from './vehicles';
 import { SHELL_R } from '../art/beach';
 
-// Stage 3's boss and wildlife. The giant clam sits half buried at the water's edge.
-// Shut, its shell turns every shot. It has to open up to spit, and that is the moment
-// to shoot it right in the lips.
+// Stage 3's boss and wildlife. The abyssal clam sits half buried at the water's edge.
+// Shut, its armored shell turns every shot. It has to open up to fire, and that is the
+// moment to put a burst into the eye inside.
 
-const SHELL_Z = 11, LIPS_Z = 10.5; // just behind the sand tiles, so the sand hides the buried hinge
+const SHELL_Z = 11, CORE_Z = 10.5; // just behind the sand tiles, so the sand hides the buried hinge
 const MAX_OPEN = 0.62;              // radians each half swings out
 
 function splash(g: Game, x: number, y: number) {
   g.addFx(new Anim(g, g.assets.fx.splash, x, y, 3, 34));
 }
 
-/** Pearls spat in an arc. They skip along the sand a couple of times before they stop. */
+/** Glowing orbs lobbed in an arc. They skip along the sand a couple of times before they burst. */
 export class Pearl extends EnemyBullet {
   bounces = 0;
   constructor(g: Game, x: number, y: number, vx: number, vy: number, public floor: number) {
@@ -36,7 +36,7 @@ export class Pearl extends EnemyBullet {
   }
 }
 
-/** A pearl the size of a beach ball, rolling along the sand. Jump it or shoot it. */
+/** A spiked mine-urchin rolling along the sand. Jump it or shoot it. */
 export class BigPearl extends Enemy {
   rot = 0;
   vy = -2;
@@ -216,12 +216,12 @@ export class GiantClam implements Hittable {
   maxHp = 110;
   invulnerable = true;
   deflect = true;
-  shellL: Sprite; shellR: Sprite; lips: Sprite;
+  shellL: Sprite; shellR: Sprite; core: Sprite;
   mode: Mode = 'rise';
   modeT = 0;
   t = 0;
   open = 0;        // how far the halves have swung apart, radians
-  pucker = false;
+  blaze = false;
   flashT = 0;
   cooldown = 60;
   attacks = 0;
@@ -231,11 +231,11 @@ export class GiantClam implements Hittable {
   constructor(public g: Game, public hx: number, public floor: number, public left: number, public right: number) {
     const a = g.assets.beach;
     this.hingeY = floor + 10;
-    this.lips = g.gfx.sprite(a.lips[0], LIPS_Z);
+    this.core = g.gfx.sprite(a.core[0], CORE_Z);
     this.shellL = g.gfx.sprite(a.shell, SHELL_Z);
     this.shellR = g.gfx.sprite(a.shell, SHELL_Z);
     this.shellR.flip = true;
-    for (const s of [this.lips, this.shellL, this.shellR]) s.setFlashColor(1, 1, 1);
+    for (const s of [this.core, this.shellL, this.shellR]) s.setFlashColor(1, 1, 1);
     g.audio.sfx('rumble');
     this.draw();
   }
@@ -279,7 +279,7 @@ export class GiantClam implements Hittable {
     this.t++; this.modeT++;
     if (this.flashT > 0) this.flashT--;
     const k = this.enraged ? 0.7 : 1;
-    this.pucker = false;
+    this.blaze = false;
     switch (this.mode) {
       case 'rise':
         // shoulders up out of the sand
@@ -300,14 +300,14 @@ export class GiantClam implements Hittable {
         this.openTo(MAX_OPEN * 0.8, 0.04);
         const volleys = this.enraged ? [34, 58, 82, 106] : [40, 72, 104];
         for (const v of volleys) {
-          if (this.modeT >= v - 6 && this.modeT < v + 4) this.pucker = true;
+          if (this.modeT >= v - 6 && this.modeT < v + 4) this.blaze = true;
           if (this.modeT === v) this.spit();
         }
         if (this.modeT > volleys[volleys.length - 1] + 30) this.close(90 * k);
         break;
       }
       case 'roll': {
-        // gape wide and inhale, dragging everyone in, then cough up a huge pearl
+        // gape wide and inhale, dragging everyone in, then roll out a spiked mine
         this.openTo(MAX_OPEN, 0.05);
         const [mx, my] = this.mouth;
         if (this.modeT > 15 && this.modeT < 85) {
@@ -323,12 +323,12 @@ export class GiantClam implements Hittable {
           }
         }
         if (this.modeT === 90 || (this.enraged && this.modeT === 125)) {
-          this.pucker = true;
+          this.blaze = true;
           g.enemies.push(new BigPearl(g, mx - 20, my, this.enraged ? -3 : -2.5, this.floor));
           g.audio.sfx('pearl'); g.audio.sfx('bigBoom', 0.3);
           g.gfx.shake = 3;
         }
-        if (this.modeT > 86 && this.modeT < 96) this.pucker = true;
+        if (this.modeT > 86 && this.modeT < 96) this.blaze = true;
         if (this.modeT > (this.enraged ? 150 : 120)) this.close(80 * k);
         break;
       }
@@ -349,13 +349,13 @@ export class GiantClam implements Hittable {
         break;
       }
       case 'crabs': {
-        // the lips part and out climb the crabs
+        // the shell cracks open and armored crabs scuttle out
         this.openTo(MAX_OPEN * 0.55, 0.04);
         const drops = this.enraged ? [30, 50, 70] : [32, 62];
         for (const d of drops) if (this.modeT === d) {
           const [mx, my] = this.mouth;
           g.enemies.push(new Crab(g, mx, my + 10, false, -1.2 - Math.random() * 1.2, -3.5));
-          this.pucker = true;
+          this.blaze = true;
           g.audio.sfx('gulp', 0.6);
         }
         if (this.modeT > drops[drops.length - 1] + 40) this.close(70 * k);
@@ -373,7 +373,7 @@ export class GiantClam implements Hittable {
     }
     this.invulnerable = !this.vulnerable;
     this.deflect = !this.vulnerable && this.mode !== 'dying';
-    // contact: the whole clam is a wall of shell and lip
+    // contact: the whole clam is a wall of shell and teeth
     if (this.mode !== 'dying' && this.sink < 40) {
       const y = this.hingeY + this.sink;
       for (const p of g.livePlayers()) {
@@ -408,18 +408,18 @@ export class GiantClam implements Hittable {
     const y = this.hingeY + this.sink;
     const shudder = this.mode === 'geyser' && this.modeT < 140 ? Math.sin(this.modeT * 2.1) : 0;
     const flash = this.flashT > 0 ? 0.7 : this.mode === 'dying' && this.modeT < 140 && this.modeT % 6 < 3 ? 0.5 : 0;
-    const L = this.shellL, R = this.shellR, M = this.lips;
+    const L = this.shellL, R = this.shellR, M = this.core;
     L.x = this.hx - 1 + shudder; L.y = y; L.rot = -this.open;
     R.x = this.hx + 1 - shudder; R.y = y; R.rot = this.open;
     const breathe = this.mode === 'idle' ? Math.sin(this.t / 20) * 0.015 : 0;
     L.rot -= breathe; R.rot += breathe;
-    M.setFrame(a.lips[this.open < 0.25 ? 0 : this.pucker ? 2 : 1]);
+    M.setFrame(a.core[this.open < 0.25 ? 0 : this.blaze ? 2 : 1]);
     M.x = this.hx; M.y = y - 4;
     M.flash = flash;
     M.setFlashColor(1, this.enraged ? 0.5 : 1, this.enraged ? 0.5 : 1);
-    // a closed shell glints when shots bounce off it; the open lips flash instead
+    // the open eye flashes when hit; the shell only flickers as it dies
     L.flash = R.flash = this.mode === 'dying' ? flash * 0.5 : 0;
     for (const s of [L, R, M]) s.sync();
   }
-  destroy() { this.shellL.remove(); this.shellR.remove(); this.lips.remove(); }
+  destroy() { this.shellL.remove(); this.shellR.remove(); this.core.remove(); }
 }

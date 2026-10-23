@@ -2,15 +2,15 @@ import { Pix, rgb, ramp, mix, RNG, frame, type Frame, type Ramp } from '../engin
 import { OUTLINE } from './humanoid';
 import { vnoise, hash } from './tiles';
 
-// Stage 3, "Pearl Beach": a tropical landing beach, its wildlife, and the giant
-// clam that lives at the end of it. Everything is painted here at boot.
+// Stage 3, "Pearl Beach": a tropical landing beach, its wildlife, and the abyssal
+// clam that has crawled up out of the trench at the end of it. Everything is painted here at boot.
 
 export interface BeachArt {
   sky: HTMLCanvasElement; islands: HTMLCanvasElement;
   palm: Frame[]; hedgehog: Frame; tower: Frame; boat: Frame; piling: Frame; starfish: Frame; shells: Frame; grass: Frame; crate: Frame;
   crab: Frame[]; crabEyes: Frame; fish: Frame[];
   pearl: Frame[]; bigPearl: Frame; geyser: Frame[]; bubbles: Frame[];
-  shell: Frame; lips: Frame[];
+  shell: Frame; core: Frame[];
 }
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
@@ -242,7 +242,9 @@ function crate(): Frame {
 
 // ---------------------------------------------------------------- critters
 
-const crabR = [rgb('#4a0e08'), rgb('#8a1e10'), rgb('#c83a1e'), rgb('#f06a3a'), rgb('#ffa070')];
+// armored reef crabs: dark plated shells with a spiked ridge and burning red eyes
+const crabR = [rgb('#0e1420'), rgb('#1e2a3e'), rgb('#34465e'), rgb('#56708a'), rgb('#8aa4b8')];
+const EYE = rgb('#ff3a20');
 
 /** k: 0, 1 walk cycle, 2 claws up and snapping. */
 function crab(k: number): Frame {
@@ -260,6 +262,8 @@ function crab(k: number): Frame {
   const body = p.newPart();
   p.ellipse(cx, cy, 11, 6, crabR[2], body);
   p.volume(body, crabR, { flat: 0.8 });
+  for (let i = -3; i <= 3; i++) p.poly([[cx + i * 3 - 1.5, cy - 4 + Math.abs(i) * 0.6], [cx + i * 3 + 1.5, cy - 4 + Math.abs(i) * 0.6], [cx + i * 3.4, cy - 8 + Math.abs(i)]], crabR[3]);
+  p.line(cx - 7, cy + 2, cx + 7, cy + 2, crabR[1]); // plate seam
   // claws
   for (const s of [-1, 1]) {
     const up = k === 2;
@@ -272,15 +276,14 @@ function crab(k: number): Frame {
     p.line(ax + s * 1, ay - 1, ax + s * 4, ay - (up ? 3 : 1), 0);
   }
   // eyestalks
-  for (const s of [-1, 1]) { p.line(cx + s * 3, cy - 5, cx + s * 4, cy - 9, crabR[2]); p.rect(cx + s * 4 - 1, cy - 11, 2, 2, rgb('#ffffff')); p.set(cx + s * 4, cy - 10, OUT); }
-  p.line(cx - 3, cy + 1, cx + 3, cy + 1, crabR[0]); // grumpy mouth
+  for (const s of [-1, 1]) { p.line(cx + s * 3, cy - 5, cx + s * 4, cy - 9, crabR[2]); p.rect(cx + s * 4 - 1, cy - 11, 2, 2, EYE); p.set(cx + s * 4 - 1, cy - 11, rgb('#ffc080')); }
   p.outline(OUT);
   return frame(p, cx, H - 1);
 }
 
 function crabEyes(): Frame {
   const p = new Pix(14, 8);
-  for (const x of [4, 9]) { p.rect(x, 3, 1, 5, crabR[2]); p.rect(x - 1, 0, 3, 3, rgb('#ffffff')); p.set(x, 1, OUT); }
+  for (const x of [4, 9]) { p.rect(x, 3, 1, 5, crabR[2]); p.rect(x - 1, 0, 3, 3, EYE); p.set(x - 1, 0, rgb('#ffc080')); }
   p.outline(OUT);
   return frame(p, 7, 8);
 }
@@ -306,30 +309,36 @@ function fish(k: number): Frame {
   return frame(p, 18, 8);
 }
 
+/** The clam's shots: globes of cold bioluminescent light. */
 function pearl(k: number): Frame {
   const p = new Pix(12, 12);
-  const cols = [rgb('#8a7a9a'), rgb('#c8bcd8'), rgb('#f0e8f4'), rgb('#ffffff')];
-  const id = p.newPart();
-  p.circle(6, 6, 4.2, cols[2], id);
-  p.volume(id, cols, { flat: 0.9 });
-  // iridescent sheen sliding around
-  p.over(4 + k, 4, rgb('#ffffff')); p.over(8 - k, 8, rgb('#f0c8e0')); p.over(7, 3 + k, rgb('#c8f0f0'));
-  p.outline(OUT);
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+    const d = Math.hypot(x - 5.5, y - 5.5);
+    if (d < 2) p.set(x, y, rgb('#ffffff'));
+    else if (d < 3.3) p.set(x, y, rgb('#a0fff0'));
+    else if (d < 4.6 + k * 0.5) p.set(x, y, rgb('#20c8d8'));
+    else if (d < 5.6 && dth(x + k, y) < 0.5) p.set(x, y, rgb('#1070a0'));
+  }
   return frame(p, 6, 6);
 }
 
+/** A spiked mine-urchin, rolled out of the shell. Jump it or shoot it. */
 function bigPearl(): Frame {
-  const S = 28;
+  const S = 32, c = S / 2;
   const p = new Pix(S, S);
-  const cols = [rgb('#6a5a7a'), rgb('#9a8cae'), rgb('#cabcd8'), rgb('#eee4f2'), rgb('#ffffff')];
+  const spine = ramp('#140a20', '#3a2050', '#6a4a8a');
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2, b = a + 0.18, a2 = a - 0.18;
+    p.shape(spine, (col, id) => p.poly([[c + Math.cos(a2) * 8, c + Math.sin(a2) * 8], [c + Math.cos(b) * 8, c + Math.sin(b) * 8], [c + Math.cos(a) * 15, c + Math.sin(a) * 15]], col, id));
+  }
   const id = p.newPart();
-  p.circle(14, 14, 12, cols[3], id);
-  p.volume(id, cols, { flat: 0.95 });
-  // a faint pink swirl so you can see it rolling
-  for (let t = 0; t < 1; t += 0.02) { const a = t * Math.PI * 3, r = 2 + t * 8; p.over(14 + Math.cos(a) * r, 14 + Math.sin(a) * r, rgb('#f4c8dc')); }
-  p.over(9, 8, rgb('#ffffff')); p.over(10, 8, rgb('#ffffff')); p.over(9, 9, rgb('#ffffff'));
+  p.circle(c, c, 10, rgb('#3a2050'), id);
+  p.volume(id, [rgb('#140a20'), rgb('#2a1840'), rgb('#4a2e6a'), rgb('#6a4a8a'), rgb('#9a7ab8')], { flat: 0.9 });
+  // glowing seams so you can see it roll
+  for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2; p.line(c, c, c + Math.cos(a) * 8, c + Math.sin(a) * 8, rgb('#20e0d0')); }
+  p.circle(c, c, 2.5, rgb('#c0fff8'));
   p.outline(OUT);
-  return frame(p, 14, 14);
+  return frame(p, c, c);
 }
 
 function geyser(k: number): Frame {
@@ -362,17 +371,19 @@ function bubbles(k: number): Frame {
   return frame(p, 15, 11);
 }
 
-// ---------------------------------------------------------------- the giant clam
+// ---------------------------------------------------------------- the abyssal clam
 
-// The clam sits on its hinge with its two halves standing up like a fan. When it
-// opens, they swing apart to show what it has been hiding. The shell is drawn as
-// the left half; the right half is the same sprite, mirrored.
+// A clam the size of a tank, dredged up from the trench. It sits on its hinge with its two
+// armored halves standing up like a fan, bioluminescent veins glowing between the ribs.
+// When it opens, the halves swing apart to bare a ring of teeth around a single huge eye.
+// The shell is drawn as the left half; the right half is the same sprite, mirrored.
 export const SHELL_R = 88;
-const SHELL = [rgb('#3a2a3e'), rgb('#6a5068'), rgb('#9a7e8e'), rgb('#c8aca8'), rgb('#e8d4c4'), rgb('#fff4e6')];
+const SHELL = [rgb('#0a1018'), rgb('#162232'), rgb('#22364a'), rgb('#34506a'), rgb('#4e7088'), rgb('#7a9cb0')];
+const GLOW = [rgb('#0a6a7a'), rgb('#20c8d8'), rgb('#a0fff0')];
 
 function shellHalf(): Frame {
   const R = SHELL_R;
-  const W = R + 6, H = R + 8;
+  const W = R + 12, H = R + 14;
   const hx = W - 2, hy = H - 4;   // the hinge
   const p = new Pix(W, H);
   const a0 = -Math.PI + 0.14, a1 = -Math.PI / 2;
@@ -381,85 +392,95 @@ function shellHalf(): Frame {
     const dx = x - hx, dy = y - hy;
     const r = Math.hypot(dx, dy);
     let a = Math.atan2(dy, dx);
-    if (dx >= 0 && dy < 0) a = -Math.PI / 2 + Math.min(0.03, dx / 60); // let it overlap the seam a touch
+    if (dx >= 0 && dy < 0) a = -Math.PI / 2 + Math.min(0.03, dx / 60); // overlap the seam a touch
     if (a < a0 - 0.02 || a > a1 + 0.04 || dy > 0) continue;
     const u = (a - a0) / (a1 - a0);                    // 0 at the outer side, 1 at the seam
     const rib = Math.cos(u * ribs * Math.PI * 2);
-    // the rim is a deep zigzag, like a giant clam's
-    const edge = R - 9 + rib * 7 - (u < 0.08 ? (0.08 - u) * 120 : 0);
+    // heavy ribs that end in hooked spikes past the rim
+    const spike = rib > 0.6 ? (rib - 0.6) * 30 : 0;
+    const edge = R - 8 + rib * 4 + spike - (u < 0.08 ? (0.08 - u) * 120 : 0);
     if (r > edge || r < 7) continue;
     let k = rib > 0.35 ? 4 : rib > -0.35 ? 3 : 2;
-    if (r > edge - 4) k = rib > 0 ? 5 : 3;                // pale lip
-    if (Math.floor(r / 9) % 2 === 0 && Math.abs(rib) < 0.8 && hash(x, y, 701) < 0.6) k--; // growth bands
-    if (r < 22) k = Math.max(1, k - 2);                    // dark, crusty near the hinge
+    if (r > R - 6) k = rib > 0.6 ? 5 : 3;                  // bright spike tips and rim
+    if (Math.floor(r / 11) % 2 === 0 && Math.abs(rib) < 0.8 && hash(x, y, 701) < 0.5) k--; // growth plates
+    if (r < 22) k = Math.max(0, k - 2);                    // crusty near the hinge
     if (u > 0.94) k = Math.max(0, k - 2);                  // shadow along the seam
     k += dth(x, y) < 0.2 ? -1 : 0;
-    p.set(x, y, SHELL[Math.max(0, Math.min(5, k))]);
+    let c = SHELL[Math.max(0, Math.min(5, k))];
+    // glowing veins in the grooves between ribs, brightest toward the rim
+    if (rib < -0.9 && r > 20 && r < R - 10) c = GLOW[r > R - 30 ? 2 : r > 40 ? 1 : 0];
+    p.set(x, y, c);
   }
-  // barnacles and a strand of weed
+  // barnacle crust and a few glowing nodes
   const rng = new RNG(88);
   for (let i = 0; i < 9; i++) {
-    const a = rng.range(a0 + 0.2, a1 - 0.2), r = rng.range(26, R - 20);
+    const a = rng.range(a0 + 0.2, a1 - 0.2), r = rng.range(26, R - 24);
     const x = hx + Math.cos(a) * r, y = hy + Math.sin(a) * r;
-    p.circle(x, y, 2.4, rgb('#d8d2c4')); p.over(x, y, rgb('#4a4040')); p.over(x - 1, y - 1, rgb('#ffffff'));
+    p.circle(x, y, 2.4, SHELL[1]); p.over(x, y, i % 3 ? SHELL[0] : GLOW[2]); p.over(x - 1, y - 1, SHELL[4]);
   }
-  for (let t = 0; t < 1; t += 0.02) p.set(hx - 40 + Math.sin(t * 9) * 3, hy - 50 + t * 26, rgb('#3a7a3a'));
   p.outline(OUT);
   return frame(p, hx, hy);
 }
 
-// What the shell has been hiding: a ruffled, rosy mantle and a pair of plump lips with a
-// pearl tucked between them. It's a clam. Clams look like this. Probably.
-const MANTLE = [rgb('#3a0e2a'), rgb('#6a1a48'), rgb('#9a2e66'), rgb('#c85288'), rgb('#e886aa'), rgb('#ffc0d4')];
-const LIP = [rgb('#6a1424'), rgb('#a02a3a'), rgb('#d04a54'), rgb('#f07a7a'), rgb('#ffaaa0'), rgb('#ffe0d8')];
-const SPOT = rgb('#5ac8e8');
+// The thing inside: dark flesh lit by glowing veins, a ring of needle teeth, and one huge eye.
+const FLESH = [rgb('#05080c'), rgb('#0e1820'), rgb('#18283a'), rgb('#24384e'), rgb('#3a5470'), rgb('#5a7a98')];
+const TOOTH: Ramp = ramp('#6a7470', '#d0dcd0', '#ffffff');
 
-/** k: 0 lips pressed shut, 1 parted with the pearl showing, 2 puckered to spit. */
-function lips(k: number): Frame {
+/** k: 0 lid shut, 1 eye open and watching, 2 eye blazing as it fires. */
+function core(k: number): Frame {
   const W = 72, H = 92;
   const p = new Pix(W, H);
-  const cx = W / 2, cy = 50;
-  // mantle with a frilly edge and the iridescent spots giant clams have
+  const cx = W / 2, cy = 46;
+  // the mantle: an armored fleshy mass with veins of light
   const m = p.newPart();
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const a = Math.atan2(y - cy, x - cx);
-    const fr = 1 + Math.sin(a * 11) * 0.05;
-    const dx = (x - cx) / (33 * fr), dy = (y - cy) / (40 * fr);
-    if (dx * dx + dy * dy <= 1 && y < H - 4) p.set(x, y, MANTLE[3], m);
+    const fr = 1 + Math.sin(a * 9) * 0.04;
+    const dx = (x - cx) / (33 * fr), dy = (y - cy) / (42 * fr);
+    if (dx * dx + dy * dy <= 1 && y < H - 4) p.set(x, y, FLESH[3], m);
   }
-  p.volume(m, MANTLE, { flat: 0.6, pattern: (x, y) => (vnoise(x / 4, y / 4, 711) > 0.7 ? 1 : 0) });
-  for (let i = 0; i < 26; i++) {
-    const a = (i / 26) * Math.PI * 2, r = 0.78 + (i % 3) * 0.06;
-    p.over(cx + Math.cos(a) * 30 * r, cy + Math.sin(a) * 36 * r, SPOT);
+  p.volume(m, FLESH, { flat: 0.6, pattern: (x, y) => (vnoise(x / 4, y / 4, 711) > 0.7 ? 1 : 0) });
+  const rng = new RNG(31);
+  for (let i = 0; i < 7; i++) {
+    let x = cx + rng.range(-26, 26), y = rng.range(10, 84);
+    for (let s = 0; s < 18; s++) { x += rng.range(-1.2, 1.2) + (cx - x) * 0.05; y += rng.range(-1.2, 1.2) + (cy - y) * 0.05; p.over(x, y, GLOW[s > 12 ? 1 : 0]); }
   }
-  // the frill: a lighter ruffled rim
-  for (let t = 0; t < Math.PI * 2; t += 0.01) {
-    const fr = 1 + Math.sin(t * 11) * 0.05;
-    p.over(cx + Math.cos(t) * 32 * fr, cy + Math.sin(t) * 39 * fr, MANTLE[5]);
-    p.over(cx + Math.cos(t) * 30 * fr, cy + Math.sin(t) * 37 * fr, MANTLE[4]);
+  // a ring of needle teeth around the socket
+  const er = 17;
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const x0 = cx + Math.cos(a) * (er + 7), y0 = cy + Math.sin(a) * (er + 9);
+    const x1 = cx + Math.cos(a) * (er + 1), y1 = cy + Math.sin(a) * (er + 2);
+    const nx = -Math.sin(a) * 2, ny = Math.cos(a) * 2;
+    p.shape(TOOTH, (c, id) => p.poly([[x0 - nx, y0 - ny], [x0 + nx, y0 + ny], [x1, y1]], c, id));
   }
-  // the opening between the lips
-  const gap = [1, 7, 9][k];
-  const lipH = k === 2 ? 22 : 28;
-  if (k > 0) {
-    p.ellipse(cx, cy, gap + 2, lipH - 2, rgb('#2a0410'));
-    p.ellipse(cx, cy + 2, gap, lipH - 8, rgb('#5a0a1c'));
-    // the pearl, glowing in there
-    const pr = k === 2 ? 7 : 6;
-    const pid = p.newPart();
-    p.circle(cx, cy - (k === 2 ? 0 : 1), pr, rgb('#f0e8f4'), pid);
-    p.volume(pid, [rgb('#8a7a9a'), rgb('#c8bcd8'), rgb('#f0e8f4'), rgb('#ffffff')], { flat: 0.9 });
-  }
-  // two plump lips, one each side
-  for (const s of [-1, 1]) {
-    const id = p.newPart();
-    const lx = cx + s * (gap + (k === 2 ? 7 : 8));
-    p.ellipse(lx, cy, k === 2 ? 9 : 10, lipH, LIP[3], id);
-    if (k === 2) p.ellipse(lx - s * 3, cy, 7, lipH - 4, LIP[3], id); // pushed forward into an O
-    p.volume(id, LIP, { flat: 0.75 });
-    // a glossy highlight and a crease
-    for (let y = -lipH + 8; y < lipH - 10; y += 2) p.over(lx - 4 + Math.round(Math.sin(y / 6)), cy + y, LIP[5]);
-    p.over(lx + s * 4, cy - lipH + 6, LIP[1]); p.over(lx + s * 4, cy + lipH - 6, LIP[1]);
+  // the socket
+  p.ellipse(cx, cy, er + 1, er + 2, rgb('#020304'));
+  if (k === 0) {
+    // heavy armored lid, shut tight
+    const lid = p.newPart();
+    p.ellipse(cx, cy, er, er + 1, SHELL[3], lid);
+    p.volume(lid, SHELL, { flat: 0.8 });
+    p.line(cx - er + 2, cy, cx + er - 2, cy, GLOW[0]);
+  } else {
+    // the eye: a gold iris with a slit pupil, looking toward the player (left)
+    const glow = k === 2;
+    const iris = glow ? [rgb('#a04000'), rgb('#ff8a00'), rgb('#ffd040'), rgb('#fff6c0')] : [rgb('#5a2a00'), rgb('#b06000'), rgb('#f0a020'), rgb('#ffe080')];
+    const ball = p.newPart();
+    p.ellipse(cx, cy, er - 1, er, rgb('#d0d8d0'), ball);
+    p.volume(ball, [rgb('#3a4038'), rgb('#7a8478'), rgb('#b0bab0'), rgb('#e0e8e0')], { flat: 0.9 });
+    for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.3; p.line(cx + Math.cos(a) * (er - 2), cy + Math.sin(a) * (er - 2), cx + Math.cos(a) * 9, cy + Math.sin(a) * 9, rgb('#8a2020')); }
+    const ix = cx - 4, ir = glow ? 11 : 10;
+    for (let y = -ir; y <= ir; y++) for (let x = -ir; x <= ir; x++) {
+      const d = Math.hypot(x, y) / ir;
+      if (d > 1) continue;
+      p.set(ix + x, cy + y, iris[Math.min(3, Math.floor((1 - d) * 3.2 + (Math.atan2(y, x) * 3 % 1 > 0.5 ? 0.4 : 0)))]);
+    }
+    const pw = glow ? 3 : 1.5;
+    for (let y = -ir + 2; y <= ir - 2; y++) for (let x = -pw; x <= pw; x++) if (Math.abs(x) <= pw * Math.sqrt(1 - (y / ir) ** 2) + 0.4) p.set(ix + x, cy + y, rgb('#050505'));
+    p.set(ix - 4, cy - 5, rgb('#ffffff')); p.set(ix - 3, cy - 5, rgb('#ffffff')); p.set(ix - 4, cy - 4, rgb('#ffffff'));
+    // half-lidded at the top and bottom
+    p.ellipse(cx, cy - er - 1, er, 4, SHELL[2]); p.ellipse(cx, cy + er + 1, er, 3, SHELL[2]);
   }
   p.outline(OUT);
   return frame(p, cx, H - 4);
@@ -471,6 +492,6 @@ export function buildBeach(): BeachArt {
     palm: [palm(1), palm(2)], hedgehog: hedgehog(), tower: tower(), boat: boat(), piling: piling(), starfish: starfish(), shells: shells(), grass: grass(), crate: crate(),
     crab: [crab(0), crab(1), crab(2)], crabEyes: crabEyes(), fish: [fish(0), fish(1)],
     pearl: [pearl(0), pearl(1)], bigPearl: bigPearl(), geyser: [geyser(0), geyser(1), geyser(2)], bubbles: [bubbles(0), bubbles(1)],
-    shell: shellHalf(), lips: [lips(0), lips(1), lips(2)],
+    shell: shellHalf(), core: [core(0), core(1), core(2)],
   };
 }
