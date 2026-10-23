@@ -34,7 +34,7 @@ export function run() {
   const b = buildBeach();
   groups.push(['beach backdrops', [asFrame(b.sky), asFrame(b.islands)]]);
   groups.push(['beach props', [...b.palm, b.hedgehog, b.tower, b.boat, b.piling, b.starfish, b.shells, b.grass, b.crate]]);
-  groups.push(['giant clam', [b.shell, ...b.lips, ...b.pearl, b.bigPearl, ...b.geyser, ...b.bubbles, ...b.crab, b.crabEyes, ...b.fish]]);
+  groups.push(['abyssal clam', [b.shell, ...b.core, ...b.pearl, b.bigPearl, ...b.geyser, ...b.bubbles, ...b.crab, b.crabEyes, ...b.fish]]);
   const sn = buildSnow();
   groups.push(['snow backdrops', [asFrame(sn.sky), asFrame(sn.peaks), asFrame(sn.firs), asFrame(sn.near)]]);
   groups.push(['snow props', [...sn.pine, sn.rock, sn.cane, sn.pole, sn.lamp, sn.pile, sn.workshop, ...sn.thinIce]]);

@@ -13,7 +13,7 @@ import { BEACH_SONG, CLAM_SONG } from './beachMusic';
 
 // Stage 3: "Pearl Beach". A landing on a tropical beach held by the enemy: the sand,
 // a rickety pier over water full of barracuda, the lifeguard post, the reef, and at
-// the far end of the bay, something big sitting in the surf with its mouth shut.
+// the far end of the bay, something huge dragged up from the trench, sitting in the surf.
 
 export const MAP_W = 264, MAP_H = 32;
 export const GROUND = 28;
@@ -35,8 +35,8 @@ export class Stage3 implements Stage {
   readonly name = 'PEARL BEACH';
   readonly song = BEACH_SONG;
   readonly bossSong = CLAM_SONG;
-  readonly villain = 'THE GIANT CLAM';
-  readonly clearLines = ['THE GIANT CLAM HAS CLAMMED UP FOR GOOD.'];
+  readonly villain = 'THE ABYSSAL CLAM';
+  readonly clearLines = ['THE ABYSSAL CLAM SINKS BACK INTO THE DEEP.'];
   state: State = 'foot';
   clam: GiantClam | null = null;
   lockT = 0;
@@ -76,7 +76,7 @@ export class Stage3 implements Stage {
         if (gx.camX >= ARENA_X) {
           gx.camX = ARENA_X; this.state = 'boss'; this.lockT = 0; g.checkpoint = 2;
           g.audio.sfx('alarm');
-          g.banner = { text: 'WARNING', sub: 'THE GIANT CLAM', t: 60 };
+          g.banner = { text: 'WARNING', sub: 'THE ABYSSAL CLAM', t: 60 };
           for (const e of g.enemies) e.dead = true;
         }
         break;
@@ -96,7 +96,7 @@ export class Stage3 implements Stage {
   parts(): Hittable[] { return this.clam ? [this.clam] : []; }
   bossBar(): [number, number, string] | null {
     if (!this.clam || this.clam.mode === 'rise') return null;
-    return [this.clam.hp, this.clam.maxHp, 'GIANT CLAM'];
+    return [this.clam.hp, this.clam.maxHp, 'ABYSSAL CLAM'];
   }
   spawn(s: Spawn) {
     const g = this.g;
