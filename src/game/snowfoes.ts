@@ -2,11 +2,11 @@ import type { Sprite } from '../engine/gfx';
 import { VW, VH } from '../engine/gfx';
 import type { Game } from './game';
 import { Enemy, EnemyBullet, shoot } from './enemies';
-import { Anim, Debris, splash } from './effects';
+import { Anim, Debris, splash, explode } from './effects';
 import type { SnowWorld } from './stage4';
 
-// Stage 4 regulars: snowmen that lob snowballs, giant snowballs rolling down the
-// hills, ski troopers, and thin lake ice that gives way under your boots.
+// Stage 4 regulars: grenadiers lobbing frag grenades, ice boulders rolling down
+// the hills, ski troopers, and thin lake ice that gives way under your boots.
 
 /** A burst of powder (and a few clumps flying off). */
 export function snowBurst(g: Game, x: number, y: number, clumps = 5) {
@@ -18,17 +18,40 @@ export function snowBurst(g: Game, x: number, y: number, clumps = 5) {
   }
 }
 
-/** Lobs snowballs in an arc that lands on (or near) you. */
-export class Snowman extends Enemy {
+/** A frag grenade: bounces once, then goes off. */
+class Grenade extends EnemyBullet {
+  bounced = false;
+  update() {
+    const g = this.g;
+    super.update();
+    if (this.dead || !g.world.solidAtPx(this.x, this.y + 2)) return;
+    if (this.bounced) { this.blast(); return; }
+    this.bounced = true; this.vy = -Math.abs(this.vy) * 0.4; this.vx *= 0.5; this.y -= 2;
+    g.audio.sfx('clink', 0.4);
+  }
+  private blast() {
+    const g = this.g;
+    this.dead = true;
+    explode(g, this.x, this.y - 4, 'S');
+    for (const p of g.livePlayers()) {
+      if (!p.alive || p.invuln > 0 || p.barrier > 0) continue;
+      const [cx, cy] = p.center();
+      if (Math.abs(cx - this.x) < 14 && Math.abs(cy - this.y) < 18) p.hurt();
+    }
+  }
+}
+
+/** An arctic grenadier: lobs grenades in an arc that lands on (or near) you. */
+export class Grenadier extends Enemy {
   throwT: number;
   windT = 0;
   facing = -1;
   constructor(g: Game, x: number, y: number) {
-    super(g, x, y, g.assets.snow.snowman[0], 19);
-    this.hp = 4; this.score = 300;
+    super(g, x, y, g.assets.snow.grenadier[0], 19);
+    this.hp = 2; this.score = 300;
     this.throwT = 50 + Math.random() * 50;
   }
-  box(): [number, number, number, number] { return [this.x - 8, this.y - 38, this.x + 8, this.y]; }
+  box(): [number, number, number, number] { return [this.x - 6, this.y - 28, this.x + 6, this.y]; }
   update() {
     const g = this.g;
     const [px, py] = g.player.center();
@@ -38,12 +61,12 @@ export class Snowman extends Enemy {
       pose = 1;
       if (--this.windT === 0) {
         // aim for where the player is standing, with a flight time that grows with range
-        const sx = this.x + this.facing * 10, sy = this.y - 36;
+        const sx = this.x + this.facing * 6, sy = this.y - 30;
         const T = Math.max(36, Math.min(70, Math.abs(px - sx) / 2.6));
         const grav = 0.12;
         const vx = Math.max(-3.4, Math.min(3.4, (px - sx) / T));
         const vy = (py - sy) / T - 0.5 * grav * T;
-        g.eBullets.push(new EnemyBullet(g, sx, sy, vx, vy, g.assets.snow.snowball, 3, grav, 240));
+        g.eBullets.push(new Grenade(g, sx, sy, vx, vy, g.assets.snow.grenade, 3, grav, 240, false));
         g.audio.sfx('swap', 0.5);
         this.throwT = 90 + Math.random() * 50;
       }
@@ -51,27 +74,26 @@ export class Snowman extends Enemy {
     if (this.throwT > 80 && this.windT === 0 && this.t > 20) pose = 2;
     this.baseUpdate();
     const s = this.sprite;
-    s.setFrame(g.assets.snow.snowman[pose]);
+    s.setFrame(g.assets.snow.grenadier[pose]);
     s.flip = this.facing < 0;
     s.x = this.x; s.y = this.y; s.sync();
   }
   die() {
     this.dead = true;
     this.g.addScore(this.score);
-    this.g.audio.sfx('crunch');
-    snowBurst(this.g, this.x, this.y - 20, 7);
-    snowBurst(this.g, this.x, this.y - 6, 3);
+    explode(this.g, this.x, this.y - 14, 'S');
+    snowBurst(this.g, this.x, this.y - 4, 3);
   }
 }
 
-/** A giant snowball tumbling downhill, picking up speed on the slopes. */
+/** An ice boulder tumbling downhill, picking up speed on the slopes. */
 export class RollingBall extends Enemy {
   vx: number;
   vy = 0;
   air = false;
   rot = 0;
   constructor(g: Game, x: number, dir: number) {
-    super(g, x, 0, g.assets.snow.bigball, 21);
+    super(g, x, 0, g.assets.snow.boulder, 21);
     const w = g.world as SnowWorld;
     this.y = w.surf(x) - 13;
     this.vx = dir * 1.2;

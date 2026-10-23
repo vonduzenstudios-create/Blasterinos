@@ -30,45 +30,45 @@ export const SNOW_SONG = song(156, true, [
   { inst: 'arp', vol: 0.05, notes: arpLine(snowChords, 6) },
   { inst: 'pad', vol: 0.035, notes: padLine(snowChords, 1) },
   {
-    // open hats on the off beats jingle like sleigh bells
     inst: 'drums', vol: 0.9, drum: drums(16,
       ['k', 'h', 'o', 'h', 's', 'h', 'o', 'k', 'k', 'h', 'o', 'h', 's', 'h', 'o', 'h'],
       ['k', 'h', 'o', 'h', 's', 'h', 'o', 'k', 's', 's', 't', 's', 't', 't', 'ss', 's']),
   },
 ]);
 
-// ---------------- Boss: Santa ----------------
-// Jingle Bells, dragged into C minor and played far too fast.
-const santaChords: Chord[] = [
-  ['C', 'm'], ['C', 'm'], ['C', 'm'], ['C', 'm'], ['F', 'm'], ['C', 'm'], ['G#', 'M'], ['G', 'M'],
-  ['C', 'm'], ['C', 'm'], ['C', 'm'], ['C', 'm'], ['F', 'm'], ['C', 'm'], ['G', '7'], ['C', 'm'],
+// ---------------- Boss: the Glacier Walker ----------------
+// E minor, a heavy half-time stomp under a driving riff: the walker's footsteps.
+const walkerChords: Chord[] = [
+  ['E', 'm'], ['E', 'm'], ['C', 'M'], ['D', 'M'], ['E', 'm'], ['E', 'm'], ['A', 'm'], ['B', 'M'],
+  ['C', 'M'], ['D', 'M'], ['E', 'm'], ['G', 'M'], ['A', 'm'], ['C', 'M'], ['B', 'M'], ['B', '7'],
 ];
-const jingle = `
-D#5 . . . D#5 . . . D#5 . . . . . . .
-D#5 . . . D#5 . . . D#5 . . . . . . .
-D#5 . . . G5 . . . C5 . . . . . D5 .
-D#5 . . . . . . . . . . . . . - -
-F5 . . . F5 . . . F5 . . . . . F5 .
-F5 . . . D#5 . . . D#5 . . . D#5 . D#5 .
-D#5 . . . D5 . . . D5 . . . D#5 . . .
-D5 . . . . . . . G5 . . . . . . .
-D#5 . . . D#5 . . . D#5 . . . . . . .
-D#5 . . . D#5 . . . D#5 . . . . . . .
-D#5 . . . G5 . . . C5 . . . . . D5 .
-D#5 . . . . . . . . . . . . . - -
-F5 . . . F5 . . . F5 . . . . . F5 .
-F5 . . . D#5 . . . D#5 . . . D#5 . D#5 .
-G5 . . . G5 . . . F5 . . . D5 . . .
-C5 . . . . . . . C6 . . . G5 . D#5 .`;
-const santaBass = [0, 0, 12, 0, 0, 12, 0, 13, 0, 0, 12, 0, 10, 12, 7, 6];
-export const SANTA_SONG = song(184, true, [
-  { inst: 'lead', vol: 0.19, notes: jingle },
-  { inst: 'lead2', vol: 0.08, notes: jingle.replace(/([A-G]#?)(\d)/g, (_, n, o) => n + (parseInt(o) - 1)) },
-  { inst: 'bass', vol: 0.37, notes: bassLine(santaChords, santaBass) },
-  { inst: 'arp', vol: 0.045, notes: arpLine(santaChords, 5, 2) },
+const walkerLead = `
+E5 . . . - - E5 . G5 . . . F#5 . E5 .
+D5 . . . . . . . B4 . . . . . - -
+E5 . . . - - E5 . G5 . . . A5 . B5 .
+C6 . . . B5 . . . A5 . . . F#5 . . .
+E5 . . . - - E5 . G5 . . . F#5 . E5 .
+D5 . . . . . . . B4 . . . . . - -
+C5 . E5 . A5 . . . G5 . E5 . A5 . . .
+D#5 . . . F#5 . . . B5 . . . . . . .
+C6 . . . B5 . G5 . E5 . . . G5 . C6 .
+D6 . . . C6 . A5 . F#5 . . . A5 . D6 .
+E6 . . . B5 . G5 . E5 . . . G5 . B5 .
+D6 . . . B5 . . . G5 . . . B5 . D6 .
+C6 . . . . . A5 . E5 . . . A5 . C6 .
+E6 . . . D6 . C6 . G5 . . . C6 . E6 .
+D#6 . . . . . B5 . F#5 . . . B5 . . .
+F#6 . . . D#6 . . . B5 . . . A5 . . .`;
+const stomp = [0, -1, 0, 0, 12, -1, 0, -1, 0, 0, 12, -1, 0, 3, 5, 7];
+export const WALKER_SONG = song(168, true, [
+  { inst: 'lead', vol: 0.18, notes: walkerLead },
+  { inst: 'lead2', vol: 0.07, notes: walkerLead.replace(/([A-G]#?)(\d)/g, (_, n, o) => n + (parseInt(o) - 1)) },
+  { inst: 'bass', vol: 0.38, notes: bassLine(walkerChords, stomp) },
+  { inst: 'arp', vol: 0.045, notes: arpLine(walkerChords, 4, 2) },
+  { inst: 'pad', vol: 0.03, notes: padLine(walkerChords, 1) },
   {
     inst: 'drums', vol: 1, drum: drums(16,
-      ['k', 'o', 'k', 'o', 's', 'o', 'k', 'k', 'k', 'o', 'k', 'o', 's', 'o', 'k', 'o'],
-      ['k', 'o', 'k', 'o', 's', 'o', 'k', 'h', 's', 't', 's', 't', 's', 's', 'ss', 's'], 4, 4),
+      ['k', 'h', 'h', 'h', 's', 'h', 'k', 'h', 'k', 'k', 'h', 'h', 's', 'h', 'h', 'h'],
+      ['k', 'h', 'h', 'h', 's', 'h', 'k', 'h', 'k', 'k', 's', 'h', 't', 't', 'ss', 's'], 4, 4),
   },
 ]);

@@ -278,19 +278,13 @@ export class Audio {
         this.osc('sine', 1760, 2640, t + 0.02, 0.12, 0.14 * v, out);
         this.osc('p0.25', 2200, 1800, t + 0.04, 0.08, 0.06 * v, out);
         break;
-      case 'hoho': // a big belly laugh, three falling hos
-        for (let i = 0; i < 3; i++) {
-          const ti = t + i * 0.26;
-          this.osc('sawtooth', 150 - i * 12, 120 - i * 12, ti, 0.2, 0.22 * v, out, 0.02);
-          this.osc('p0.5', 300 - i * 24, 240 - i * 24, ti, 0.18, 0.08 * v, out, 0.02);
-          this.noise(ti, 0.2, 0.22 * v, out, 'bandpass', 700, 450, 4);
-        }
+      case 'launch': // a mine leaving its tube: a thump and a rising hiss
+        this.osc('square', 90, 40, t, 0.1, 0.25 * v, out);
+        this.noise(t, 0.3, 0.2 * v, out, 'bandpass', 900, 3000, 2);
         break;
-      case 'bells': // sleigh bells
-        for (let i = 0; i < 6; i++) {
-          this.noise(t + i * 0.07, 0.08, 0.12 * v, out, 'bandpass', 7000, 6000, 6);
-          this.osc('square', 2637, 2600, t + i * 0.07, 0.06, 0.03 * v, out);
-        }
+      case 'jets': // jump-jet burn
+        this.noise(t, 0.4, 0.3 * v, out, 'lowpass', 600, 1800, 1);
+        this.osc('sawtooth', 70, 110, t, 0.35, 0.1 * v, out);
         break;
       case 'crunch': // packed snow giving way
         this.noise(t, 0.25, 0.35 * v, out, 'lowpass', 2400, 300, 1);

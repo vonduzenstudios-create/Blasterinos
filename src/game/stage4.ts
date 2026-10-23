@@ -9,13 +9,13 @@ import type { Hittable } from './weapons';
 import { World, CHUNK, type Body } from './world';
 import type { Spawn, SpawnKind, Scenery } from './level';
 import { splash } from './effects';
-import { Snowman, HillSpawner, ThinIce } from './snowfoes';
-import { Santa } from './santa';
-import { SNOW_SONG, SANTA_SONG } from './snowmusic';
+import { Grenadier, HillSpawner, ThinIce } from './snowfoes';
+import { Walker } from './walker';
+import { SNOW_SONG, WALKER_SONG } from './snowmusic';
 
-// Stage 4: "Snowland". Rolling snowy hills with giant snowballs and ski troopers
-// coming down them, an icy downhill, a frozen lake of floes and thin ice, and
-// Santa's workshop at the end, where the man himself is waiting with his sack.
+// Stage 4: "Snowland". Rolling snowy hills with ice boulders and ski troopers
+// coming down them, an icy downhill, a frozen lake of floes and thin ice, and an
+// arctic outpost at the end, guarded by the Glacier Walker.
 
 export const MAP_W = 420, MAP_H = 40;
 const ARENA_X = 396 * TS;
@@ -135,17 +135,17 @@ type CamMode = 'scroll' | 'boss';
 export class Stage4 implements Stage {
   readonly num = 4;
   readonly name = 'SNOWLAND';
-  readonly villain = 'SANTA CLAUS';
+  readonly villain = 'THE GLACIER WALKER';
   readonly song = SNOW_SONG;
-  readonly bossSong = SANTA_SONG;
-  readonly clearLines = ['SANTA HAS BEEN PUT ON THE NAUGHTY LIST.'];
+  readonly bossSong = WALKER_SONG;
+  readonly clearLines = ['THE OUTPOST HAS FALLEN. THE PASS IS OPEN.'];
   camMode: CamMode = 'scroll';
   lockT = 0;
-  santa: Santa | null = null;
+  boss: Walker | null = null;
 
   constructor(public g: Game) {}
 
-  get inBoss() { return !!this.santa; }
+  get inBoss() { return !!this.boss; }
   get bossActive() { return this.camMode === 'boss'; }
   get sw() { return this.g.world as SnowWorld; }
 
@@ -159,7 +159,7 @@ export class Stage4 implements Stage {
     buildDecor(g, w);
     g.spawns = buildSpawns(w);
     for (const [x, row] of THIN_ICE) g.misc.push(new ThinIce(g, x * TS, row * TS));
-    this.camMode = 'scroll'; this.lockT = 0; this.santa = null;
+    this.camMode = 'scroll'; this.lockT = 0; this.boss = null;
     g.gfx.camX = cp === 0 ? 0 : cp === 1 ? CP1_CAM : ARENA_X - 60;
     const sx = cp === 0 ? 3 * TS : g.gfx.camX + 70;
     g.gfx.camY = Math.max(0, Math.min(MAX_CAM_Y, w.surf(sx) - 148));
@@ -183,15 +183,15 @@ export class Stage4 implements Stage {
       if (gx.camX >= ARENA_X) {
         gx.camX = ARENA_X; this.camMode = 'boss'; this.lockT = 0; g.checkpoint = 2;
         g.audio.sfx('alarm');
-        g.banner = { text: 'WARNING', sub: 'SOMEBODY HAS BEEN NAUGHTY', t: 60 };
+        g.banner = { text: 'WARNING', sub: 'HEAVY ARMOUR APPROACHING', t: 60 };
         for (const e of g.enemies) e.dead = true;
       }
     } else {
       gx.camX = ARENA_X;
       gx.camY += Math.max(-3, Math.min(3, ARENA_CAM_Y - gx.camY));
-      if (++this.lockT === 80 && !this.santa) {
-        this.santa = new Santa(g, ARENA_X, ARENA_X + VW, ARENA_FLOOR);
-        g.audio.play(SANTA_SONG);
+      if (++this.lockT === 80 && !this.boss) {
+        this.boss = new Walker(g, ARENA_X, ARENA_X + VW, ARENA_FLOOR);
+        g.audio.play(WALKER_SONG);
       }
     }
   }
@@ -204,7 +204,7 @@ export class Stage4 implements Stage {
       if (p.alive && b.onGround && p.grip < 1 && Math.abs(b.y - w.surf(b.x)) < 1) b.vx += w.slope(b.x) * 0.09;
       if (b.y > w.waterY && b.y - b.vy <= w.waterY && b.x > 156 * TS && b.x < 216 * TS) splash(g, b.x, w.waterY);
     }
-    this.santa?.update();
+    this.boss?.update();
   }
 
   grip(b: Body) {
@@ -216,16 +216,16 @@ export class Stage4 implements Stage {
     return 1;
   }
 
-  parts(): Hittable[] { return this.santa ? this.santa.parts() : []; }
+  parts(): Hittable[] { return this.boss ? this.boss.parts() : []; }
   bossBar(): [number, number, string] | null {
-    const s = this.santa;
+    const s = this.boss;
     if (!s || s.intro) return null;
-    return [s.hp, s.maxHp, 'SANTA'];
+    return [s.hp, s.maxHp, 'GLACIER WALKER'];
   }
   spawn(s: Spawn) {
     const g = this.g;
     switch (s.kind as string) {
-      case 'snowman': g.enemies.push(new Snowman(g, s.x, s.y)); return true;
+      case 'grenadier': g.enemies.push(new Grenadier(g, s.x, s.y)); return true;
       case 'balls': g.misc.push(new HillSpawner(g, 'ball', s.arg[0], s.arg[1], s.arg[2], s.arg[3])); return true;
       case 'skiers': g.misc.push(new HillSpawner(g, 'skier', s.arg[0], s.arg[1], s.arg[2], s.arg[3])); return true;
     }
@@ -234,8 +234,8 @@ export class Stage4 implements Stage {
   deck(): Deck | null { return null; }
   respawn() { return false; }
   onMidBossDefeated() {}
-  onBossDefeated() { this.santa?.destroy(); this.santa = null; }
-  destroy() { this.santa?.destroy(); this.santa = null; }
+  onBossDefeated() { this.boss?.destroy(); this.boss = null; }
+  destroy() { this.boss?.destroy(); this.boss = null; }
 }
 
 // ---------------------------------------------------------------- map
@@ -269,7 +269,7 @@ function buildTiles(w: SnowWorld) {
   // the last climb
   log(334, 338, 15);
   ice(358, 359, 23, 25);
-  // the workshop yard: two log perches
+  // the outpost yard: two log perches
   log(399, 402, 22);
   log(413, 416, 22);
 }
@@ -281,10 +281,10 @@ function buildSpawns(w: SnowWorld): Spawn[] {
   const k = (s: string) => s as SpawnKind;
   const s: Spawn[] = [
     { kind: 'runners', x: px(8), y: gy(8), arg: [px(8), px(70), 110, 30] },
-    { kind: k('snowman'), x: px(24), y: gy(24) },
+    { kind: k('grenadier'), x: px(24), y: gy(24) },
     { kind: 'capsule', x: px(30), y: gy(30) - 90, arg: 'S' },
     { kind: 'rifle', x: px(38), y: gy(38) },
-    { kind: k('snowman'), x: px(48), y: gy(48) },
+    { kind: k('grenadier'), x: px(48), y: gy(48) },
     { kind: 'drone', x: px(56), y: gy(56) - 70, arg: -1 },
     { kind: 'sniper', x: px(65), y: py(21) },
     // the big hill
@@ -293,21 +293,21 @@ function buildSpawns(w: SnowWorld): Spawn[] {
     { kind: 'capsule', x: px(90), y: gy(90) - 90, arg: 'M' },
     { kind: 'rifle', x: px(94), y: py(18) },
     { kind: 'sniper', x: px(109), y: py(12) },
-    { kind: k('snowman'), x: px(113), y: gy(113) },
+    { kind: k('grenadier'), x: px(113), y: gy(113) },
     // the icy run down
     { kind: 'drone', x: px(126), y: gy(126) - 60, arg: -1 },
     { kind: 'capsule', x: px(132), y: gy(132) - 80, arg: 'L' },
     { kind: 'rifleBag', x: px(150), y: gy(150) },
     // the lake
-    { kind: k('snowman'), x: px(163), y: py(30) },
+    { kind: k('grenadier'), x: px(163), y: py(30) },
     { kind: 'drone', x: px(172), y: py(23), arg: -1 },
     { kind: 'rifle', x: px(181), y: py(29) },
     { kind: 'capsule', x: px(186), y: py(22), arg: 'B' },
     { kind: 'drone', x: px(195), y: py(23), arg: -1 },
-    { kind: k('snowman'), x: px(200), y: py(30) },
+    { kind: k('grenadier'), x: px(200), y: py(30) },
     // the far shore
     { kind: 'runners', x: px(216), y: gy(216), arg: [px(214), px(300), 100, 30] },
-    { kind: k('snowman'), x: px(230), y: gy(230) },
+    { kind: k('grenadier'), x: px(230), y: gy(230) },
     { kind: 'sniper', x: px(241), y: py(20) },
     { kind: 'capsule', x: px(248), y: gy(248) - 90, arg: 'H' },
     { kind: 'turret', x: px(262), y: gy(262) },
@@ -315,16 +315,16 @@ function buildSpawns(w: SnowWorld): Spawn[] {
     { kind: k('balls'), x: px(266), y: gy(266), arg: [px(286), px(256), px(282), 160] },
     { kind: 'rifle', x: px(285), y: py(17) },
     { kind: 'drone', x: px(292), y: gy(292) - 70, arg: -1 },
-    { kind: k('snowman'), x: px(297), y: gy(297) },
-    // the last climb to the workshop
+    { kind: k('grenadier'), x: px(297), y: gy(297) },
+    // the last climb to the outpost
     { kind: k('skiers'), x: px(306), y: gy(308), arg: [px(334), px(300), px(326), 150] },
     { kind: k('balls'), x: px(318), y: gy(320), arg: [px(338), px(310), px(334), 170] },
     { kind: 'rifle', x: px(336), y: py(15) },
     { kind: 'capsule', x: px(346), y: gy(346) - 90, arg: 'F' },
     { kind: 'sniper', x: px(358), y: py(23) },
-    { kind: k('snowman'), x: px(368), y: gy(368) },
+    { kind: k('grenadier'), x: px(368), y: gy(368) },
     { kind: 'turret', x: px(376), y: gy(376) },
-    { kind: k('snowman'), x: px(382), y: gy(382) },
+    { kind: k('grenadier'), x: px(382), y: gy(382) },
     { kind: 'drone', x: px(386), y: gy(386) - 70, arg: -1 },
   ];
   return s;
@@ -446,15 +446,16 @@ function buildDecor(g: Game, w: SnowWorld): Sprite[] {
     const y = w.surf(x);
     if (isFinite(y)) put(a.rock, x, y + 6, 13, i % 2 === 0);
   }
-  // lamps lighting the path up to the workshop
-  for (const t of [322, 346, 370, 388]) put(a.lamp, t * TS, w.surf(t * TS) + 2, 10);
-  // the workshop yard
-  put(a.workshop, ARENA_X + VW / 2, ARENA_FLOOR + 3, 8);
-  put(a.pile, ARENA_X + VW / 2 - 104, ARENA_FLOOR + 2, 13);
-  put(a.pile, ARENA_X + VW / 2 + 110, ARENA_FLOOR + 2, 13, true);
-  put(a.cane, ARENA_X + 16, ARENA_FLOOR + 2, 13);
-  put(a.cane, ARENA_X + VW - 16, ARENA_FLOOR + 2, 13, true);
-  put(a.pole, 392 * TS, w.surf(392 * TS) + 2, 10);
+  // lamps and warning beacons lighting the path up to the outpost
+  for (const t of [322, 346, 370]) put(a.lamp, t * TS, w.surf(t * TS) + 2, 10);
+  for (const t of [334, 358, 384]) put(a.beacon, t * TS, w.surf(t * TS) + 2, 10);
+  put(a.mast, 391 * TS, w.surf(391 * TS) + 2, 9);
+  // the outpost yard
+  put(a.outpost, ARENA_X + VW / 2, ARENA_FLOOR + 3, 8, false, 0.72);
+  put(a.crates, ARENA_X + VW / 2 - 124, ARENA_FLOOR + 2, 13);
+  put(a.crates, ARENA_X + VW / 2 + 128, ARENA_FLOOR + 2, 13, true);
+  put(a.beacon, ARENA_X + 10, ARENA_FLOOR + 2, 13);
+  put(a.beacon, ARENA_X + VW - 10, ARENA_FLOOR + 2, 13, true);
   put(a.pine[2], ARENA_X - 30, ARENA_FLOOR + 5, 9, false, 0.7);
   return out;
 }
