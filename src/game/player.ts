@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import type { Sprite } from '../engine/gfx';
 import { VW, VH } from '../engine/gfx';
-import { makeBody, type Body } from './world';
+import { makeBody, type Body, type Rail } from './world';
 import type { Game } from './game';
 import { fireWeapon, type Weapon, type WeaponKind } from './weapons';
-import { muzzle, standPose, airPose, runPose, AIMS, type Look, type HeroFrames } from '../art/humanoid';
+import { muzzle, standPose, airPose, runPose, hangPose, AIMS, HANG_DROP, type Look, type HeroFrames } from '../art/humanoid';
 import { Anim } from './effects';
 import { TS } from '../art/tiles';
 
@@ -23,10 +23,13 @@ export const HEROES: HeroDef[] = [
 ];
 
 const GRAV = 0.22, MAXFALL = 5.5, JUMP_CUT = 2.4;
+/** Hand-over-hand speed along a rail. */
+const CLIMB_SPEED = 1.05;
 /** Frames between shots while the button is held (mashing is limited only by the weapon). */
 const HOLD_RATE: Record<string, number> = { R: 16, M: 0, S: 22, L: 26, H: 18, F: 0 };
 
-type State = 'play' | 'reel' | 'dying' | 'dead';
+/** hook: frozen in place while the grapple flies up. hang: holding on to a rail. */
+type State = 'play' | 'hook' | 'reel' | 'hang' | 'dying' | 'dead';
 
 export class Player {
   def: HeroDef;
@@ -53,10 +56,15 @@ export class Player {
   stateT = 0;
   lastSafe = { x: 0, y: 0 };
   safeT = 0;
-  hook: { x: number; y: number; vx: number; vy: number; latched: boolean; tx: number; ty: number; dist: number } | null = null;
+  hook: { x: number; y: number; vx: number; vy: number; latched: boolean; tx: number; ty: number; dist: number; rail: Rail | null } | null = null;
   hookSprite: Sprite;
   rope: THREE.Mesh;
   hookCool = 0;
+  /** The rail being hung from. */
+  rail: Rail | null = null;
+  /** Frames before a rail can be grabbed again (just let go of one). */
+  grabCool = 0;
+  climbT = 0;
   moving = false;
   locked = false;
   /** How well the boots hold on the ground last stood on: 1 is full control, ice is far less. */
@@ -82,7 +90,7 @@ export class Player {
   }
 
   get weapon() { return this.weapons[this.slot]; }
-  get alive() { return this.state === 'play' || this.state === 'reel'; }
+  get alive() { return this.state === 'play' || this.state === 'hook' || this.state === 'reel' || this.state === 'hang'; }
 
   box(): [number, number, number, number] {
     const b = this.body;
@@ -108,6 +116,7 @@ export class Player {
     this.t++; this.stateT++;
     if (this.cooldown > 0) this.cooldown--;
     if (this.hookCool > 0) this.hookCool--;
+    if (this.grabCool > 0) this.grabCool--;
     if (this.invuln > 0) this.invuln--;
     if (this.barrier > 0) this.barrier--;
     if (this.def.armor && !this.armor) { this.armorRegen--; if (this.armorRegen <= 0) { this.armor = true; g.audio.sfx('swap'); } }
@@ -119,6 +128,8 @@ export class Player {
     this.locked = inp.held('lock');
 
     if (this.state === 'reel') { this.updateReel(); this.draw(); return; }
+    if (this.state === 'hook') { this.updateFrozen(); this.draw(); return; }
+    if (this.state === 'hang') { this.updateHang(dirX, up, down); this.draw(); return; }
 
     if (dirX !== 0) this.facing = dirX;
     const ground = b.onGround;
@@ -130,7 +141,8 @@ export class Player {
       else if (down) this.aim = 'df';
       else this.aim = 'f';
     } else if (ground && this.locked) {
-      this.aim = up ? (dirX ? 'uf' : 'u') : down ? 'df' : 'f';
+      // locked in place you can point the gun straight down at your feet
+      this.aim = up ? (dirX ? 'uf' : 'u') : down ? (dirX ? 'df' : 'd') : 'f';
     } else {
       this.aim = up ? (dirX ? 'uf' : 'u') : down ? (dirX ? 'df' : 'd') : 'f';
     }
@@ -145,7 +157,8 @@ export class Player {
     this.moving = want !== 0 && ground;
 
     if (inp.pressed('jump') && ground) {
-      if (down && this.onOneway()) { b.dropTimer = 14; b.y += 2; this.curl = false; }
+      // only a plain down + jump drops through; down + a direction is a normal jump
+      if (down && dirX === 0 && this.onOneway()) { b.dropTimer = 14; b.y += 2; this.curl = false; }
       else { b.vy = -this.def.jump; this.curl = true; this.jumpHeld = true; g.audio.sfx('jump'); }
     }
     // variable height: letting go of jump early cuts the rise short
@@ -174,12 +187,17 @@ export class Player {
       if (this.safeT > 20 && g.world.groundBelow(b.x - 4, b.y + 1, 1) && g.world.groundBelow(b.x + 4, b.y + 1, 1)) this.lastSafe = { x: b.x, y: b.y };
     } else this.safeT = 0;
     this.wasGround = b.onGround;
+    // holding up while passing a rail always catches it
+    if (up && !b.onGround && this.grabCool <= 0) {
+      const r = g.world.railAcross(b.x, prevY - HANG_DROP, b.y - HANG_DROP);
+      if (r) { this.grab(r); this.draw(); return; }
+    }
 
     // ---- weapons ----
     if (inp.pressed('swap')) { this.slot = 1 - this.slot; g.audio.sfx('swap'); }
     this.tryFire(0);
     // ---- grappling hook ----
-    if (inp.pressed('special') && !this.hook && this.hookCool <= 0) this.fireHook(up && dirX === 0);
+    if (inp.pressed('special') && !this.hook && this.hookCool <= 0) { this.fireHook(); this.draw(); return; }
     this.updateHook();
 
     // fell off the bottom of the screen
@@ -214,18 +232,76 @@ export class Player {
     const worldAng = f > 0 ? ang : Math.PI - ang;
     if (this.prone) return [b.x + f * 17, b.y - 4, worldAng];
     if (this.curl) return [b.x + Math.cos(worldAng) * 10, b.y - 12 + Math.sin(worldAng) * 10, worldAng];
-    const pose = this.body.onGround ? (this.moving ? runPose(this.aim, 0, 6) : standPose(this.aim)) : airPose(this.aim);
+    const pose = this.state === 'hang' ? hangPose(this.aim)
+      : this.body.onGround ? (this.moving ? runPose(this.aim, 0, 6) : standPose(this.aim)) : airPose(this.aim);
     const [mx, my] = muzzle(pose, this.look);
     return [b.x + mx * f, b.y + my, worldAng];
   }
 
   // ---------------- grappling hook ----------------
-  private fireHook(straightUp: boolean) {
-    const [cx, cy] = this.center();
-    const a = straightUp ? -Math.PI / 2 : (this.facing > 0 ? -Math.PI / 4 : -3 * Math.PI / 4);
-    const sp = 8;
-    this.hook = { x: cx, y: cy - 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, latched: false, tx: 0, ty: 0, dist: 0 };
+  /** The grapple always goes straight up, and the player holds still until it lands or misses. */
+  private fireHook() {
+    const b = this.body;
+    this.hook = { x: b.x, y: b.y - HANG_DROP, vx: 0, vy: -8, latched: false, tx: 0, ty: 0, dist: 0, rail: null };
+    this.state = 'hook'; this.stateT = 0;
+    b.vx = 0; b.vy = 0;
+    this.curl = false; this.jumpHeld = false; this.prone = false;
     this.g.audio.sfx('grapple');
+  }
+  private updateFrozen() {
+    const b = this.body;
+    b.vx = 0; b.vy = 0;
+    this.keepOnScreen();
+    this.updateHook();
+    if (this.state === 'hook' && !this.hook) this.state = 'play';
+  }
+  /** Carried along by a scrolling ride, but kept inside the camera and on the deck. */
+  private keepOnScreen() {
+    const g = this.g, b = this.body;
+    b.x += g.scrollVx;
+    b.x = Math.max(g.gfx.camX + 6, Math.min(g.gfx.camX + VW - 6, b.x));
+    const deck = g.stage.deck();
+    if (deck && b.onGround) b.x = Math.max(deck.x0, Math.min(deck.x1, b.x));
+  }
+  private grab(r: Rail) {
+    const b = this.body;
+    this.state = 'hang'; this.stateT = 0;
+    this.rail = r;
+    b.x = Math.max(r.x0 + 3, Math.min(r.x1 - 3, b.x));
+    b.y = r.y + HANG_DROP; b.vx = 0; b.vy = 0; b.onGround = false;
+    this.curl = false; this.jumpHeld = false; this.prone = false;
+    this.wasGround = false;
+    this.g.audio.sfx('clink', 0.7);
+  }
+  private letGo() {
+    this.state = 'play'; this.rail = null; this.grabCool = 14;
+  }
+  /** Hanging from a rail: climb along it, shoot, and jump (or down + jump to drop) to let go. */
+  private updateHang(dirX: number, up: boolean, down: boolean) {
+    const g = this.g, inp = g.input, b = this.body, r = this.rail;
+    if (!r) { this.state = 'play'; return; }
+    if (dirX !== 0) this.facing = dirX;
+    this.aim = down ? (dirX ? 'df' : 'd') : up && dirX ? 'uf' : 'f';
+    this.moving = false;
+    if (!this.locked && dirX !== 0) {
+      const nx = Math.max(r.x0 + 3, Math.min(r.x1 - 3, b.x + dirX * CLIMB_SPEED));
+      const edge = nx + dirX * 5;
+      if (!g.world.solidAtPx(edge, b.y - 4) && !g.world.solidAtPx(edge, b.y - 24)) {
+        this.moving = nx !== b.x;
+        b.x = nx;
+      }
+    }
+    if (this.moving) this.climbT++;
+    this.keepOnScreen();
+    b.y = r.y + HANG_DROP; b.vx = 0; b.vy = 0; b.onGround = false;
+    if (b.x < r.x0 || b.x > r.x1) { this.letGo(); return; }
+    if (inp.pressed('swap')) { this.slot = 1 - this.slot; g.audio.sfx('swap'); }
+    this.tryFire(0);
+    if (inp.pressed('jump')) {
+      this.letGo();
+      if (down) b.vy = 0.5;
+      else { b.vy = -this.def.jump * 0.85; this.curl = true; this.jumpHeld = true; g.audio.sfx('jump'); }
+    }
   }
   private updateHook() {
     const h = this.hook;
@@ -233,7 +309,15 @@ export class Player {
     const g = this.g;
     if (!h.latched) {
       for (let s = 0; s < 2; s++) {
+        const py = h.y;
         h.x += h.vx / 2; h.y += h.vy / 2; h.dist += 4;
+        const rail = g.world.railAcross(h.x, py, h.y);
+        if (rail) {
+          h.latched = true; h.rail = rail; h.y = rail.y;
+          g.audio.sfx('clink');
+          this.state = 'reel'; this.stateT = 0; this.curl = false;
+          break;
+        }
         const tx = Math.floor(h.x / TS), ty = Math.floor(h.y / TS);
         if (g.world.solid(tx, ty) || g.world.oneway(tx, ty)) {
           // find the top of this column so we can pull the player up onto it
@@ -255,6 +339,18 @@ export class Player {
   private updateReel() {
     const h = this.hook!, b = this.body, g = this.g;
     if (!h) { this.state = 'play'; return; }
+    if (h.rail) {
+      // pulled straight up to hang from the rail
+      const r = h.rail;
+      const dy = r.y + HANG_DROP - b.y;
+      const sp = this.def.id === 'ryder' ? 6 : 5;
+      if (this.stateT % 6 === 0) g.audio.sfx('reel');
+      if (-dy <= sp || this.stateT > 70) { this.hook = null; this.hookCool = 12; this.grab(r); this.drawHook(); return; }
+      b.y -= sp; b.vy = 0;
+      h.x = b.x; h.y = r.y;
+      this.drawHook();
+      return;
+    }
     // target: standing on top of the hooked column, nudged toward its center
     let tx = h.tx * TS + TS / 2;
     const ty = h.ty * TS;
@@ -281,7 +377,7 @@ export class Player {
   private drawHook() {
     const h = this.hook;
     if (!h) { this.hookSprite.visible = false; this.rope.visible = false; return; }
-    const [hx, hy] = [this.body.x + this.facing * 2, this.body.y - 26];
+    const [hx, hy] = [this.body.x + this.facing * 2, this.body.y - HANG_DROP];
     this.hookSprite.visible = true;
     this.hookSprite.x = h.x; this.hookSprite.y = h.y;
     this.hookSprite.rot = Math.atan2(h.y - hy, h.x - hx);
@@ -312,6 +408,7 @@ export class Player {
     this.state = fell ? 'dead' : 'dying';
     this.stateT = 0;
     this.hook = null; this.drawHook();
+    this.rail = null;
     this.body.vx = -this.facing * 1.6; this.body.vy = -3.8;
     this.prone = false; this.curl = false;
     g.audio.sfx('die');
@@ -335,6 +432,7 @@ export class Player {
     b.x = x; b.y = y; b.vx = 0; b.vy = 1; b.onGround = false;
     this.grip = 1;
     this.state = 'play'; this.stateT = 0;
+    this.rail = null; this.hook = null; this.drawHook();
     this.curl = true;
     this.invuln = 150;
     this.lastSafe = { x, y };
@@ -346,7 +444,8 @@ export class Player {
     s.flip = this.facing < 0;
     if (this.state === 'dying') { s.setFrame(fr.hurt); s.rot = (this.stateT * 0.25) * -this.facing; }
     else if (this.state === 'dead') s.setFrame(fr.dead);
-    else if (this.state === 'reel') s.setFrame(fr.hang);
+    else if (this.state === 'reel' || this.state === 'hook') s.setFrame(fr.hang);
+    else if (this.state === 'hang') s.setFrame(this.moving && this.sinceShot > 14 ? fr.hangMove[Math.floor(this.climbT / 7) % 4] : fr.hangAim[this.aim] ?? fr.hangAim.f);
     else if (this.curl && !b.onGround) {
       const f = fr.curl[Math.floor(this.t / 4) % 4];
       s.setFrame(f);

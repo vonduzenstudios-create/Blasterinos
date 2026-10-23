@@ -207,8 +207,17 @@ export class FishSchool {
   destroy() {}
 }
 
-type Mode = 'rise' | 'idle' | 'spit' | 'roll' | 'geyser' | 'crabs' | 'dying';
-const PATTERN: Mode[] = ['spit', 'geyser', 'roll', 'spit', 'crabs', 'geyser', 'spit', 'roll'];
+type Mode = 'rise' | 'idle' | 'spit' | 'roll' | 'geyser' | 'spin' | 'crabs' | 'dying';
+/**
+ * A fixed loop, so the fight can be learned. Every round of water spouts is followed by
+ * the clam spinning across the lagoon like a saw blade, and it spits pearls as soon as
+ * it lands on the far side.
+ */
+const PATTERN: Mode[] = ['roll', 'geyser', 'spin', 'crabs', 'geyser', 'spin'];
+/** How deep it digs in to spin: the blade shows about 48px above the sand. */
+const SPIN_SINK = 30;
+/** Where the clam sits on each side of the arena, from the arena's left edge. */
+const SIDE_R = 290, SIDE_L = 94;
 
 export class GiantClam implements Hittable {
   dead = false;
@@ -217,6 +226,12 @@ export class GiantClam implements Hittable {
   invulnerable = true;
   deflect = true;
   shellL: Sprite; shellR: Sprite; core: Sprite;
+  /** The other half of the saw blade while it spins (the lower half of the turn). */
+  bladeL: Sprite; bladeR: Sprite;
+  /** -1 when sitting on the right and facing left, 1 on the left facing right. */
+  dir = -1;
+  spinAng = 0;
+  spinFrom = 0; spinTo = 0;
   mode: Mode = 'rise';
   modeT = 0;
   t = 0;
@@ -235,6 +250,10 @@ export class GiantClam implements Hittable {
     this.shellL = g.gfx.sprite(a.shell, SHELL_Z);
     this.shellR = g.gfx.sprite(a.shell, SHELL_Z);
     this.shellR.flip = true;
+    this.bladeL = g.gfx.sprite(a.shell, SHELL_Z);
+    this.bladeR = g.gfx.sprite(a.shell, SHELL_Z);
+    this.bladeR.flip = true;
+    this.bladeL.visible = this.bladeR.visible = false;
     for (const s of [this.core, this.shellL, this.shellR]) s.setFlashColor(1, 1, 1);
     g.audio.sfx('rumble');
     this.draw();
@@ -264,6 +283,7 @@ export class GiantClam implements Hittable {
   private die() {
     const g = this.g;
     this.hp = 0;
+    this.spinAng = 0;
     this.set('dying');
     g.addScore(20000);
     g.audio.sfx('roar');
@@ -314,7 +334,7 @@ export class GiantClam implements Hittable {
           if (this.modeT % 12 === 0) g.audio.sfx('hiss', 0.5);
           for (const p of g.livePlayers()) if (p.alive && p.state === 'play' && Math.abs(p.body.x - this.hx) > 90) p.body.x += Math.sign(this.hx - p.body.x) * 0.5;
           if (this.modeT % 4 === 0) {
-            const sx = mx - 60 - Math.random() * 120, sy = this.floor - 4 - Math.random() * 60;
+            const sx = mx + this.dir * (60 + Math.random() * 120), sy = this.floor - 4 - Math.random() * 60;
             // spray and sand whipping into its mouth
             const a = new Anim(g, g.assets.fx.spark, sx, sy, 8, 14);
             a.vx = (mx - sx) / 24; a.vy = (my - sy) / 24;
@@ -324,12 +344,49 @@ export class GiantClam implements Hittable {
         }
         if (this.modeT === 90 || (this.enraged && this.modeT === 125)) {
           this.blaze = true;
-          g.enemies.push(new BigPearl(g, mx - 20, my, this.enraged ? -3 : -2.5, this.floor));
+          g.enemies.push(new BigPearl(g, mx + this.dir * 20, my, this.dir * (this.enraged ? 3 : 2.5), this.floor));
           g.audio.sfx('pearl'); g.audio.sfx('bigBoom', 0.3);
           g.gfx.shake = 3;
         }
         if (this.modeT > 86 && this.modeT < 96) this.blaze = true;
         if (this.modeT > (this.enraged ? 150 : 120)) this.close(80 * k);
+        break;
+      }
+      case 'spin': {
+        // digs in and shudders (the tell), spins up into a saw blade and cuts across the
+        // lagoon to the other side, then surfaces facing back the other way and spits
+        this.openTo(0, 0.1);
+        const DIG = 36, sp = this.enraged ? 3.4 : 2.9;
+        if (this.modeT === 1) {
+          this.spinFrom = this.hx;
+          this.spinTo = this.left + (this.dir < 0 ? SIDE_L : SIDE_R);
+          g.audio.sfx('rumble'); g.audio.sfx('bite');
+        }
+        if (this.modeT <= DIG) {
+          this.sink = Math.min(SPIN_SINK, this.sink + SPIN_SINK / 24);
+          // winding up: rolling the way it is about to go
+          this.spinAng += this.dir * 0.4 * (this.modeT / DIG);
+          if (this.modeT % 4 === 0) dust(g, this.hx + (this.modeT % 8 ? -1 : 1) * 60, this.floor - 2, 14);
+          g.gfx.shake = Math.max(g.gfx.shake, 1);
+        } else if (Math.abs(this.spinTo - this.hx) > 0.5) {
+          const step = Math.sign(this.spinTo - this.hx) * Math.min(sp, Math.abs(this.spinTo - this.hx));
+          this.hx += step;
+          this.spinAng += this.dir * 0.4;
+          g.gfx.shake = Math.max(g.gfx.shake, 1.5);
+          if (this.modeT % 3 === 0) dust(g, this.hx - step * 20, this.floor - 2, 14);
+          if (this.modeT % 6 === 0) splash(g, this.hx - step * 14, this.floor);
+          if (this.modeT % 9 === 0) g.audio.sfx('rumble', 0.5);
+        } else {
+          // ease the blade to a rest and come back up
+          const rest = Math.round(this.spinAng / Math.PI) * Math.PI;
+          this.spinAng += (rest - this.spinAng) * 0.3;
+          this.sink = Math.max(0, this.sink - 1.6);
+          if (this.sink <= 0) {
+            this.spinAng = 0; this.dir = -this.dir;
+            g.audio.sfx('bite');
+            this.set('spit'); g.audio.sfx('gulp');
+          }
+        }
         break;
       }
       case 'geyser': {
@@ -341,7 +398,8 @@ export class GiantClam implements Hittable {
           g.audio.sfx('bite');
           for (let i = 0; i < n; i++) {
             const p = g.livePlayers()[i % Math.max(1, g.livePlayers().length)] ?? g.player;
-            const x = Math.max(this.left + 20, Math.min(this.hx - 90, p.body.x + (i === 0 ? 0 : (i % 2 ? -1 : 1) * 46)));
+            const [lo, hi] = this.dir < 0 ? [this.left + 20, this.hx - 90] : [this.hx + 90, this.right - 20];
+            const x = Math.max(lo, Math.min(hi, p.body.x + (i === 0 ? 0 : (i % 2 ? -1 : 1) * 46)));
             g.misc.push(new Geyser(g, x, this.floor, i * 26, this.enraged ? 50 : 60));
           }
         }
@@ -354,7 +412,7 @@ export class GiantClam implements Hittable {
         const drops = this.enraged ? [30, 50, 70] : [32, 62];
         for (const d of drops) if (this.modeT === d) {
           const [mx, my] = this.mouth;
-          g.enemies.push(new Crab(g, mx, my + 10, false, -1.2 - Math.random() * 1.2, -3.5));
+          g.enemies.push(new Crab(g, mx, my + 10, false, this.dir * (1.2 + Math.random() * 1.2), -3.5));
           this.blaze = true;
           g.audio.sfx('gulp', 0.6);
         }
@@ -397,9 +455,10 @@ export class GiantClam implements Hittable {
     const T = 50, grav = 0.13;
     for (let i = 0; i < n; i++) {
       const f = 0.45 + (i / (n - 1)) * 0.9;
-      const vx = Math.min(-0.6, ((px - mx) / T) * f + (Math.random() - 0.5) * 0.25);
+      const aimVx = ((px - mx) / T) * f + (Math.random() - 0.5) * 0.25;
+      const vx = this.dir < 0 ? Math.min(-0.6, aimVx) : Math.max(0.6, aimVx);
       const vy = (py - my) / T - 0.5 * grav * T - 0.6 - i * 0.12;
-      g.eBullets.push(new Pearl(g, mx - 10, my, vx, vy, this.floor));
+      g.eBullets.push(new Pearl(g, mx + this.dir * 10, my, vx, vy, this.floor));
     }
     g.audio.sfx('pearl');
   }
@@ -409,8 +468,17 @@ export class GiantClam implements Hittable {
     const shudder = this.mode === 'geyser' && this.modeT < 140 ? Math.sin(this.modeT * 2.1) : 0;
     const flash = this.flashT > 0 ? 0.7 : this.mode === 'dying' && this.modeT < 140 && this.modeT % 6 < 3 ? 0.5 : 0;
     const L = this.shellL, R = this.shellR, M = this.core;
-    L.x = this.hx - 1 + shudder; L.y = y; L.rot = -this.open;
-    R.x = this.hx + 1 - shudder; R.y = y; R.rot = this.open;
+    const spin = this.spinAng;
+    L.x = this.hx - 1 + shudder; L.y = y; L.rot = -this.open + spin;
+    R.x = this.hx + 1 - shudder; R.y = y; R.rot = this.open + spin;
+    // spinning, the shut shell turns into a full disc: the second pair is the half facing away
+    const bl = this.bladeL, br = this.bladeR;
+    bl.visible = br.visible = spin !== 0;
+    if (spin !== 0) {
+      bl.x = this.hx - 1; bl.y = y; bl.rot = spin + Math.PI;
+      br.x = this.hx + 1; br.y = y; br.rot = spin + Math.PI;
+      bl.sync(); br.sync();
+    }
     const breathe = this.mode === 'idle' ? Math.sin(this.t / 20) * 0.015 : 0;
     L.rot -= breathe; R.rot += breathe;
     M.setFrame(a.core[this.open < 0.25 ? 0 : this.blaze ? 2 : 1]);
@@ -421,5 +489,5 @@ export class GiantClam implements Hittable {
     L.flash = R.flash = this.mode === 'dying' ? flash * 0.5 : 0;
     for (const s of [L, R, M]) s.sync();
   }
-  destroy() { this.shellL.remove(); this.shellR.remove(); this.core.remove(); }
+  destroy() { this.shellL.remove(); this.shellR.remove(); this.core.remove(); this.bladeL.remove(); this.bladeR.remove(); }
 }

@@ -164,6 +164,7 @@ export class Game {
     this.gfx.clear();
     this.scrollVx = 0;
     this.stage.build(cp);
+    this.world.buildRails(this.gfx);
     this.checkpoint = cp;
     this.sceneReady = true;
   }

@@ -274,6 +274,10 @@ function buildTiles(w: SnowWorld) {
   floe(186, 189, 27);
   rock(197, 202, 30);
   floe(205, 208, 29);
+  // frozen cable rails strung across the open water
+  w.rail(172, 178, 25, 'icy');
+  w.rail(190, 196, 24, 'icy');
+  w.rail(209, 215, 26, 'icy');
   // far shore: an ice tower, ice blocks for cover, log walkways
   ice(240, 242, 20, 24);
   ice(258, 259, 26, 28);

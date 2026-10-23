@@ -123,3 +123,68 @@ function skulls(): Frame {
 export function buildProps(): PropArt {
   return { tree: [tree(1), tree(2), tree(3)], bush: [bush(1), bush(2), bush(3)], pillar: pillar(), statue: statue(), vine: vine(), skulls: skulls() };
 }
+
+// ---------------------------------------------------------------- rails
+
+export type RailStyle = 'steel' | 'wood' | 'bone' | 'icy';
+
+/**
+ * An overhead rail the player can hang from: a bar `w` px long whose center line sits
+ * `hang` px down from the top of the frame, held up by chains, vines or sinew.
+ */
+export function drawRail(w: number, style: RailStyle, hang: number): Frame {
+  const H = hang + 8;
+  const p = new Pix(w, H);
+  const y = hang;
+  const posts: number[] = [5];
+  for (let x = 52; x < w - 30; x += 56) posts.push(x);
+  posts.push(w - 6);
+  const rng = new RNG(w * 7 + hang);
+  const bar = style === 'wood' ? ramp('#5a4220', '#a0803c', '#d8c070')
+    : style === 'bone' ? ramp('#6a5a64', '#b8a8a0', '#ece0d0')
+    : ramp('#2a2e3a', '#5a6272', '#a8b4c4');
+  // supports first, so the bar sits over them
+  for (const x of posts) {
+    if (style === 'steel' || style === 'icy') {
+      // chain links hanging out of the dark above, a clamp around the bar
+      for (let cy = 0; cy < y - 3; cy += 4) {
+        const link = (cy / 4) % 2 === 0;
+        p.shape(ramp('#2a2e3a', '#6a7282', '#b0bccc'), (c, id) => link ? p.rect(x - 1, cy, 3, 4, c, id) : p.rect(x, cy, 1, 4, c, id));
+      }
+      p.shape(ramp('#20242e', '#4a5262', '#8a96a8'), (c, id) => p.rect(x - 3, y - 4, 7, 9, c, id), 2);
+    } else if (style === 'wood') {
+      // a hanging vine with a few leaves, lashed around the pole
+      const ph = rng.range(0, 6);
+      p.shape(ramp('#14321a', '#2a5a26', '#4e8a36'), (c, id) => {
+        for (let vy = 0; vy < y; vy++) p.set(x + Math.round(Math.sin(vy / 9 + ph) * 1.5), vy, c, id), p.set(x + 1 + Math.round(Math.sin(vy / 9 + ph) * 1.5), vy, c, id);
+      });
+      for (let vy = 10; vy < y - 6; vy += 14 + rng.int(0, 8)) {
+        const lx = x + Math.round(Math.sin(vy / 9 + ph) * 1.5) + (vy % 2 ? 3 : -3);
+        p.shape(ramp('#1a4a1e', '#3a8a30', '#7acc48'), (c, id) => p.ellipse(lx, vy, 2.5, 1.4, c, id));
+      }
+      p.shape(ramp('#4a3418', '#7a5a2a', '#a8844a'), (c, id) => { p.rect(x - 3, y - 3, 7, 2, c, id); p.rect(x - 3, y + 1, 7, 2, c, id); });
+    } else {
+      // sinew strands from the hive roof, swelling where they grip the bar
+      const ph = rng.range(0, 6);
+      p.shape(ramp('#3a1430', '#7a2a5a', '#c05a8a'), (c, id) => {
+        for (let vy = 0; vy < y; vy++) {
+          const sx = x + Math.round(Math.sin(vy / 11 + ph) * 2);
+          p.set(sx, vy, c, id); p.set(sx + 1, vy, c, id);
+          if (vy > y - 8) p.set(sx - 1, vy, c, id), p.set(sx + 2, vy, c, id);
+        }
+      });
+    }
+  }
+  // the bar itself
+  p.shape(bar, (c, id) => p.rect(0, y - 2, w, 5, c, id), 2);
+  if (style === 'wood') for (let x = 6; x < w - 2; x += 13) { p.set(x, y - 1, bar[0]); p.set(x, y, bar[0]); p.set(x, y + 1, bar[0]); p.set(x + 1, y - 1, bar[2]); }
+  if (style === 'bone') for (let x = 9; x < w - 4; x += 18) { p.rect(x, y - 3, 3, 7, bar[0]); p.set(x + 1, y - 2, bar[2]); }
+  if (style === 'steel' || style === 'icy') for (const x of posts) { p.set(x - 2, y - 3, rgb('#c8d4e0')); p.set(x + 2, y - 3, rgb('#c8d4e0')); }
+  if (style === 'icy') {
+    // a crust of snow on top and icicles underneath
+    for (let x = 0; x < w; x++) if (rng.next() < 0.8) { p.set(x, y - 3, rgb('#f0f8ff')); if (rng.next() < 0.4) p.set(x, y - 4, rgb('#d8e8f8')); }
+    for (let x = 3; x < w - 3; x += 5 + rng.int(0, 6)) { const n = rng.int(1, 4); for (let k = 0; k < n; k++) p.set(x, y + 3 + k, rgb(k === n - 1 ? '#e8f8ff' : '#a8d0f0')); }
+  }
+  p.outline(OUTLINE);
+  return frame(p, 0, y);
+}
