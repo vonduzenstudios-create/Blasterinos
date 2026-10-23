@@ -46,6 +46,10 @@ export function buildWorld(): World {
   plank(162, 164, 93);
   ground(166, 231);
   plank(205, 209, 92); plank(214, 218, 89);
+  // vines strung over the gaps: grapple up or jump and hold up to swing across
+  w.rail(17, 25, 91, 'wood');
+  w.rail(55, 70, 90, 'wood');
+  w.rail(157, 169, 90, 'wood');
   // fortress gate (removed when destroyed)
   w.fill(197, 80, 199, GROUND - 1, T.METAL);
 

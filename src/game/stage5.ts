@@ -140,6 +140,12 @@ function buildWorld(): World {
   rib(186, 189, 10);
   rib(192, 195, 8);
   resin(196, 9, 200, 12);
+  // sinew bars hanging from the roof over the pits
+  w.rail(30, 36, 8, 'bone', 88);
+  w.rail(68, 75, 7, 'bone', 72);
+  w.rail(110, 117, 8, 'bone', 88);
+  w.rail(152, 159, 8, 'bone', 88);
+  w.rail(204, 211, 8, 'bone', 88);
   // the Queen's chamber: two ribs to get up at her head
   rib(229, 232, 8);
   rib(235, 238, 8);

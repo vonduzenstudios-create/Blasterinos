@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Gfx, tex } from '../engine/gfx';
 import { paintChunk, T, TS, SOLID, ONEWAY } from '../art/tiles';
+import { drawRail, type RailStyle } from '../art/props';
 
 export const CHUNK = 32;
 
@@ -18,9 +19,13 @@ export function makeBody(x: number, y: number, w: number, h: number): Body {
   return { x, y, w, h, vx: 0, vy: 0, onGround: false, dropTimer: 0, hitWall: false, hitCeil: false };
 }
 
+/** An overhead bar the player can hang from and climb along hand over hand. y is the bar's center line. */
+export interface Rail { x0: number; x1: number; y: number; style: RailStyle; hang: number; }
+
 export class World {
   w: number; h: number;
   tiles: Uint8Array;
+  rails: Rail[] = [];
   private meshes = new Map<string, THREE.Mesh>();
   private gfx: Gfx | null = null;
 
@@ -39,6 +44,19 @@ export class World {
   }
   fill(x0: number, y0: number, x1: number, y1: number, t: number) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) this.set(x, y, t);
+  }
+  /**
+   * Add an overhead rail spanning tiles x0..x1, through the middle of a tile row.
+   * `hang` is how far its supports reach up toward whatever holds it.
+   */
+  rail(x0: number, x1: number, row: number, style: RailStyle = 'steel', hang = 96) {
+    this.rails.push({ x0: x0 * TS, x1: (x1 + 1) * TS, y: row * TS + 8, style, hang });
+  }
+  /** The rail whose bar lies between two heights at this x, if any (for grabbing on the way past). */
+  railAcross(x: number, ya: number, yb: number): Rail | null {
+    const lo = Math.min(ya, yb), hi = Math.max(ya, yb);
+    for (const r of this.rails) if (x >= r.x0 + 3 && x <= r.x1 - 3 && r.y >= lo && r.y <= hi) return r;
+    return null;
   }
   /** Which tile ids block and which are one-way. A stage with its own tile set overrides these. */
   solidT(t: number) { return SOLID.has(t); }
@@ -104,6 +122,14 @@ export class World {
   }
 
   // ---------- rendering ----------
+  /** Rails are sprites over the tiles, drawn for every kind of world once the stage is built. */
+  buildRails(gfx: Gfx) {
+    for (const r of this.rails) {
+      const f = drawRail(r.x1 - r.x0, r.style, r.hang);
+      const s = gfx.sprite(f, 13);
+      s.x = r.x0; s.y = r.y; s.sync();
+    }
+  }
   build(gfx: Gfx) {
     this.gfx = gfx;
     for (let cy = 0; cy < Math.ceil(this.h / CHUNK); cy++)

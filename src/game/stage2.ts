@@ -242,6 +242,9 @@ function buildWorld(): World {
   mesa(641, 644, GROUND - 4);
   scaffold(633, 637, GROUND - 11);
   sand(660, 668, GROUND - 1);
+  // cargo rails left over the pits
+  w.rail(538, 547, 23);
+  w.rail(573, 581, 23);
   // the nest: two scaffold perches over open sand
   scaffold(692, 696, GROUND - 5);
   scaffold(707, 711, GROUND - 5);

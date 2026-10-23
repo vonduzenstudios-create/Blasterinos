@@ -143,9 +143,14 @@ function buildWorld(): World {
   // last stretch: a gun emplacement
   w.fill(222, GROUND - 2, 225, GROUND - 1, T.METAL);
   dock(218, 220, GROUND - 2);
-  // the bay: two bits of driftwood to dodge from
-  dock(243, 246, GROUND - 4);
-  dock(248, 250, GROUND - 7);
+  // rails over the pier gaps and the reef channels
+  w.rail(64, 70, 23);
+  w.rail(75, 81, 23);
+  w.rail(88, 94, 23);
+  w.rail(160, 166, 22);
+  w.rail(176, 182, 23);
+  // the bay: a rusted gantry rail right across the lagoon, high enough to hang over the clam
+  w.rail(241, 262, 20);
   return w;
 }
 

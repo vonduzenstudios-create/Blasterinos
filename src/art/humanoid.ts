@@ -83,7 +83,8 @@ export interface Pose {
   lean: number;                    // torso lean in degrees, + = forward
   legs: [number, number, number, number]; // back thigh, back shin, front thigh, front shin (deg from down, + = forward)
   aim: number | null;              // gun angle in degrees, 0 = forward, -90 = up, null = no gun
-  arms?: 'gun' | 'up' | 'flail';
+  arms?: 'gun' | 'up' | 'flail' | 'grip' | 'swing';
+  reach?: number;                  // 'swing': which hand is ahead, -1..1
   bob?: number;
   tail?: number;                   // bandana tail flutter phase
 }
@@ -139,8 +140,17 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
   const gripX = sh[0] + Math.cos(ad) * 4, gripY = sh[1] + Math.sin(ad) * 4 + 1;
   const foreX = sh[0] + Math.cos(ad) * 8, foreY = sh[1] + Math.sin(ad) * 8;
 
+  const rc = pose.reach ?? 0;
   if (pose.arms === 'up') {
     p.shape(darker(armRamp), (c, id) => p.line(neckX - 1, neckY + 1, neckX + 1, neckY - 9, c, 3, id));
+  } else if (pose.arms === 'swing') {
+    // hand over hand: the back hand reaches ahead while the front one trails, then they swap
+    p.shape(darker(armRamp), (c, id) => p.line(neckX - 1, neckY + 1, neckX + 1 + rc * 4, neckY - 9, c, 3, id));
+    p.shape(darker(look.skin), (c, id) => p.circle(neckX + 1 + rc * 4, neckY - 10, 1.5, c, id));
+  } else if (pose.arms === 'grip') {
+    // one hand on the rail, the other on the gun
+    p.shape(darker(armRamp), (c, id) => p.line(neckX - 1, neckY + 1, neckX, neckY - 9, c, 3, id));
+    p.shape(darker(look.skin), (c, id) => p.circle(neckX, neckY - 10, 1.5, c, id));
   } else if (pose.arms === 'flail') {
     p.shape(darker(armRamp), (c, id) => p.line(neckX - 1, neckY + 1, neckX - 6, neckY - 6, c, 3, id));
   } else if (pose.aim !== null) {
@@ -198,6 +208,9 @@ export function drawHumanoid(look: Look, pose: Pose): Pix {
     p.shape(look.skin, (c, id) => p.circle(neckX + 2, neckY - 10, 1.5, c, id));
   } else if (pose.arms === 'flail') {
     p.shape(armRamp, (c, id) => p.line(neckX + 1, neckY + 1, neckX + 6, neckY - 5, c, 3, id));
+  } else if (pose.arms === 'swing') {
+    p.shape(armRamp, (c, id) => p.line(neckX + 1, neckY + 1, neckX + 1 - rc * 4, neckY - 9, c, 3, id));
+    p.shape(look.skin, (c, id) => p.circle(neckX + 1 - rc * 4, neckY - 10, 1.5, c, id));
   } else if (pose.aim !== null) {
     const len = 12 + look.bulk;
     const gx = sh[0] - Math.cos(ad) * 2, gy = sh[1] - Math.sin(ad) * 2;
@@ -251,12 +264,16 @@ function drawCurl(look: Look): Pix {
 }
 
 export interface HeroFrames {
-  stand: Record<string, Frame>;   // keyed by aim: f, uf, u, df
+  stand: Record<string, Frame>;   // keyed by aim: f, uf, u, df, d
   run: Record<string, Frame[]>;   // f, uf, df
   air: Record<string, Frame>;     // f, uf, u, df, d
   prone: Frame;
   curl: Frame[];
   hang: Frame;
+  /** Hanging from a rail by one hand, gun in the other, keyed by aim: f, uf, df, d. */
+  hangAim: Record<string, Frame>;
+  /** Climbing along a rail hand over hand. */
+  hangMove: Frame[];
   hurt: Frame;
   dead: Frame;
 }
@@ -265,7 +282,7 @@ export const AIMS: Record<string, number> = { f: 0, uf: -45, u: -90, df: 45, d: 
 
 export function standPose(aim: string): Pose {
   const a = AIMS[aim];
-  return { hipX: -1, hipY: -15, lean: aim === 'u' ? -4 : 2, legs: [-14, -6, 16, 8], aim: a };
+  return { hipX: -1, hipY: -15, lean: aim === 'u' ? -4 : aim === 'd' ? 8 : 2, legs: aim === 'd' ? [-22, -8, 22, 10] : [-14, -6, 16, 8], aim: a };
 }
 export function runPose(aim: string, i: number, n: number, tail = 0): Pose {
   const ph = (i / n) * Math.PI * 2;
@@ -278,6 +295,11 @@ export function runPose(aim: string, i: number, n: number, tail = 0): Pose {
 export function airPose(aim: string): Pose {
   return { hipX: 0, hipY: -16, lean: 3, legs: [-28, -8, 38, 8], aim: AIMS[aim], tail: 2 };
 }
+/** Feet hang this far below the rail's center line. */
+export const HANG_DROP = 36;
+export function hangPose(aim: string): Pose {
+  return { hipX: 0, hipY: -16, lean: 0, legs: [-4, 6, 8, 14], aim: AIMS[aim], arms: 'grip' };
+}
 export function pronePose(): Pose {
   return { hipX: -9, hipY: -3, lean: 90, legs: [-90, -90, -88, -92], aim: 0 };
 }
@@ -285,7 +307,7 @@ export function pronePose(): Pose {
 export function buildHero(look: Look): HeroFrames {
   const f = (pose: Pose) => frame(drawHumanoid(look, pose), AX, AY);
   const stand: Record<string, Frame> = {};
-  for (const a of ['f', 'uf', 'u', 'df']) stand[a] = f(standPose(a));
+  for (const a of ['f', 'uf', 'u', 'df', 'd']) stand[a] = f(standPose(a));
   const run: Record<string, Frame[]> = {};
   for (const a of ['f', 'uf', 'df']) run[a] = Array.from({ length: 6 }, (_, i) => f(runPose(a, i, 6)));
   const air: Record<string, Frame> = {};
@@ -296,6 +318,8 @@ export function buildHero(look: Look): HeroFrames {
     stand, run, air, curl,
     prone: frame(drawProne(look), 22, 40),
     hang: f({ hipX: 0, hipY: -16, lean: 0, legs: [-6, 4, 10, 18], aim: null, arms: 'up' }),
+    hangAim: Object.fromEntries(['f', 'uf', 'df', 'd'].map((a) => [a, f(hangPose(a))])),
+    hangMove: [1, 0.3, -1, -0.3].map((r, i) => f({ hipX: 0, hipY: -16, lean: 0, legs: i % 2 ? [-8, 2, 10, 20] : [4, 16, -4, 6], aim: null, arms: 'swing', reach: r })),
     hurt: f({ hipX: 0, hipY: -16, lean: -25, legs: [-30, -10, 20, 40], aim: null, arms: 'flail' }),
     dead: frame(drawDead(look), 22, 40),
   };
