@@ -193,8 +193,8 @@ export class Player {
       if (this.safeT > 20 && g.world.groundBelow(b.x - 4, b.y + 1, 1) && g.world.groundBelow(b.x + 4, b.y + 1, 1)) this.lastSafe = { x: b.x, y: b.y };
     } else this.safeT = 0;
     this.wasGround = b.onGround;
-    // holding up while passing a rail always catches it
-    if (up && !b.onGround && this.grabCool <= 0) {
+    // passing a rail catches it automatically; hold down to fall or jump past one
+    if (!down && !b.onGround && this.grabCool <= 0) {
       const r = g.world.railAcross(b.x, prevY - HANG_DROP, b.y - HANG_DROP);
       if (r) { this.grab(r); this.draw(); return; }
     }
@@ -289,7 +289,8 @@ export class Player {
     if (dirX !== 0) this.facing = dirX;
     this.aim = down ? (dirX ? 'df' : 'd') : up && dirX ? 'uf' : 'f';
     this.moving = false;
-    if (!this.locked && dirX !== 0) {
+    // both hands are needed to climb, so shooting (or locking aim) holds you in place
+    if (!this.locked && !inp.held('shoot') && dirX !== 0) {
       const nx = Math.max(r.x0 + 3, Math.min(r.x1 - 3, b.x + dirX * CLIMB_SPEED));
       const edge = nx + dirX * 5;
       if (!g.world.solidAtPx(edge, b.y - 4) && !g.world.solidAtPx(edge, b.y - 24)) {
