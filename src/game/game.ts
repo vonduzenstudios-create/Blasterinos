@@ -6,7 +6,7 @@ import { buildAssets, type Assets } from './assets';
 import { World } from './world';
 import { Player, HEROES, type HeroDef } from './player';
 import { PlayerBullet, WEAPON_NAMES, type Hittable } from './weapons';
-import { Enemy, EnemyBullet, Pickup, Runner, Rifleman, Turret, Leaper, Drone, Crawler, Capsule, RunnerSpawner, LogSpawner } from './enemies';
+import { Enemy, EnemyBullet, Pickup, Runner, Rifleman, Turret, Leaper, Drone, Crawler, Capsule, RunnerSpawner } from './enemies';
 import { Gate, Hydra } from './boss';
 import { buildWorld, buildSpawns, buildScenery, buildDecor, SHAFT_X, GATE_CAM_X, JUNGLE_CAM_Y, ARENA_FLOOR, LAKE_Y, GROUND, MAP_H, type Spawn, type Scenery } from './level';
 import { TS } from '../art/tiles';
@@ -235,7 +235,8 @@ export class Game {
         if (e.dead || b.hitSet.has(e)) continue;
         const eb = e.box();
         if (bb[0] < eb[2] && bb[2] > eb[0] && bb[1] < eb[3] && bb[3] > eb[1]) {
-          if (e.invulnerable) { if (!b.pierce) { b.dead = true; this.audio.sfx('clink', 0.4); } continue; }
+          // invulnerable parts only stop bullets if they are solid armor (deflect)
+          if (e.invulnerable) { if (e.deflect && !b.pierce) { b.dead = true; this.audio.sfx('clink', 0.4); } continue; }
           e.hit(b.dmg, this);
           b.hitSet.add(e);
           if (!b.pierce) { b.dead = true; if (b.kind === 'H') explode(this, b.x, b.y, 'S', false); break; }
@@ -287,7 +288,6 @@ export class Game {
       const edgeX = g.camX + VW + 16;
       switch (s.kind) {
         case 'runners': this.misc.push(new RunnerSpawner(this, s.arg[0], s.arg[1], s.arg[2])); break;
-        case 'logs': this.misc.push(new LogSpawner(this, s.arg[0] - VH, s.arg[1], [SHAFT_X + 120, SHAFT_X + 190, SHAFT_X + 260], 140)); break;
         case 'rifle': this.enemies.push(new Rifleman(this, s.x, s.y)); break;
         case 'rifleBag': this.enemies.push(new Rifleman(this, s.x, s.y, false, true)); break;
         case 'sniper': this.enemies.push(new Rifleman(this, s.x, s.y, true)); break;

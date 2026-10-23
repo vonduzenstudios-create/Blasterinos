@@ -99,10 +99,10 @@ export function fireWeapon(g: Game, w: Weapon, x: number, y: number, ang: number
   const add = (b: PlayerBullet) => g.pBullets.push(b);
   switch (w.kind) {
     case 'R':
-      if (count('R') >= 5) return 2;
+      if (count('R') >= 7) return 2;
       add(new PlayerBullet(g, 'R', x, y, c * 6.5, s * 6.5, 1));
       g.audio.sfx('rifle');
-      return 9;
+      return 5;
     case 'M': {
       const sp = 7, j = (Math.random() - 0.5) * 0.06;
       add(new PlayerBullet(g, 'M', x, y, Math.cos(ang + j) * sp, Math.sin(ang + j) * sp, w.level > 1 ? 1.5 : 1));
@@ -110,11 +110,11 @@ export function fireWeapon(g: Game, w: Weapon, x: number, y: number, ang: number
       return w.level > 1 ? 4 : 5;
     }
     case 'S': {
-      if (count('S') >= (w.level > 1 ? 20 : 12)) return 2;
+      if (count('S') >= (w.level > 1 ? 25 : 15)) return 2;
       const spread = w.level > 1 ? [-0.32, -0.16, 0, 0.16, 0.32] : [-0.2, 0, 0.2];
       for (const d of spread) add(new PlayerBullet(g, 'S', x, y, Math.cos(ang + d) * 5.6, Math.sin(ang + d) * 5.6, 1, false, 90, 5));
       g.audio.sfx('spread');
-      return 14;
+      return 8;
     }
     case 'L': {
       // A new beam replaces any beam still on screen, just like the arcade games.
@@ -122,14 +122,14 @@ export function fireWeapon(g: Game, w: Weapon, x: number, y: number, ang: number
       const k = w.level > 1 ? 'L2' : 'L';
       for (let i = 0; i < 3; i++) add(new PlayerBullet(g, k, x + c * i * 18, y + s * i * 18, c * 9, s * 9, w.level > 1 ? 4 : 2.5, true));
       g.audio.sfx('laser');
-      return 18;
+      return 12;
     }
     case 'H': {
       if (count('H') >= (w.level > 1 ? 6 : 3)) return 2;
       add(new PlayerBullet(g, 'H', x, y, c * 3, s * 3, w.level > 1 ? 3 : 2.2, false, 150, 5));
       if (w.level > 1) add(new PlayerBullet(g, 'H', x, y, Math.cos(ang - 0.5) * 3, Math.sin(ang - 0.5) * 3, 3, false, 150, 5));
       g.audio.sfx('homing');
-      return 13;
+      return 8;
     }
     case 'F': {
       const j = (Math.random() - 0.5) * 0.18;

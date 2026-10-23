@@ -3,7 +3,7 @@ import { VW, VH } from '../engine/gfx';
 import type { Frame } from '../engine/pixel';
 import type { Game } from './game';
 import { makeBody, type Body } from './world';
-import { explode, splash, Anim, Debris } from './effects';
+import { explode, Anim } from './effects';
 import type { Hittable, WeaponKind } from './weapons';
 import { TS } from '../art/tiles';
 import { muzzle, standPose, runPose, LOOKS } from '../art/humanoid';
@@ -63,6 +63,7 @@ export abstract class Enemy implements Hittable {
   offscreenT = 0;
   cullMargin = 80;
   invulnerable = false;
+  deflect = false;
   boomSize: 'S' | 'M' | 'L' = 'M';
   constructor(public g: Game, x: number, y: number, f: Frame, z = 20) {
     this.x = x; this.y = y;
@@ -226,6 +227,7 @@ export class Turret extends Enemy {
     this.base = g.gfx.sprite(g.assets.enemies.turretBase, 20);
     this.touch = false;
     this.invulnerable = true;
+    this.deflect = true;
     this.cullMargin = 140;
   }
   box(): [number, number, number, number] { return [this.x - 11, this.y - 26, this.x + 11, this.y - 6]; }
@@ -369,33 +371,6 @@ export class Crawler extends Enemy {
   }
 }
 
-/** Logs washing down the waterfall: a hazard you can shoot apart. */
-export class Log extends Enemy {
-  vy = 1;
-  spin = 0;
-  constructor(g: Game, x: number, y: number) {
-    super(g, x, y, g.assets.enemies.log, 26);
-    this.hp = 6; this.score = 200;
-    this.cullMargin = 120;
-  }
-  box(): [number, number, number, number] { return [this.x - 18, this.y - 6, this.x + 18, this.y + 6]; }
-  update() {
-    const g = this.g;
-    this.vy = Math.min(3.6, this.vy + 0.06);
-    this.y += this.vy;
-    this.spin += 0.02;
-    if (this.y > g.gfx.camY + VH + 40) { this.dead = true; return; }
-    this.baseUpdate();
-    const s = this.sprite;
-    s.rot = Math.sin(this.spin) * 0.3;
-    s.x = this.x; s.y = this.y; s.sync();
-  }
-  die() {
-    super.die();
-    for (let i = 0; i < 6; i++) this.g.addFx(new Debris(this.g, this.g.assets.fx.puff[1], this.x + (i - 3) * 6, this.y, (i - 3) * 0.6, -2 - Math.random() * 2, 40));
-  }
-}
-
 // ---------------------------------------------------------------- power-ups
 
 /** Winged capsule that flies across the screen carrying a weapon. */
@@ -485,25 +460,6 @@ export class RunnerSpawner {
           break;
         }
       }
-    }
-  }
-  destroy() {}
-}
-
-/** Drops logs down the waterfall while the camera is between two heights. */
-export class LogSpawner {
-  dead = false;
-  t = 0;
-  constructor(public g: Game, public yTop: number, public yBot: number, public xs: number[], public every = 150) {}
-  update() {
-    const g = this.g;
-    const cy = g.gfx.camY;
-    if (cy < this.yTop || cy > this.yBot) return;
-    this.t++;
-    if (this.t % this.every === 0) {
-      const x = this.xs[Math.floor(Math.random() * this.xs.length)];
-      g.enemies.push(new Log(g, x, cy - 20));
-      if (Math.random() < 0.4) splash(g, x, cy + 4);
     }
   }
   destroy() {}

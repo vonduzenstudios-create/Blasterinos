@@ -18,11 +18,13 @@ export interface HeroDef {
 }
 
 export const HEROES: HeroDef[] = [
-  { id: 'ryder', name: 'RYDER', blurb: ['FAST AND AGILE', 'HIGHER JUMP', 'QUICK GRAPPLE'], speed: 1.75, jump: 5.35, armor: false },
-  { id: 'voss', name: 'VOSS', blurb: ['HEAVY ARMOR', 'SHIELD TAKES ONE HIT', 'RECHARGES OVER TIME'], speed: 1.4, jump: 5.0, armor: true },
+  { id: 'ryder', name: 'RYDER', blurb: ['FAST AND AGILE', 'HIGHER JUMP', 'QUICK GRAPPLE'], speed: 1.75, jump: 6.55, armor: false },
+  { id: 'voss', name: 'VOSS', blurb: ['HEAVY ARMOR', 'SHIELD TAKES ONE HIT', 'RECHARGES OVER TIME'], speed: 1.4, jump: 6.1, armor: true },
 ];
 
-const GRAV = 0.22, MAXFALL = 5.5;
+const GRAV = 0.22, MAXFALL = 5.5, JUMP_CUT = 2.4;
+/** Frames between shots while the button is held (mashing is limited only by the weapon). */
+const HOLD_RATE: Record<string, number> = { R: 16, M: 0, S: 22, L: 26, H: 18, F: 0 };
 
 type State = 'play' | 'reel' | 'dying' | 'dead';
 
@@ -41,6 +43,8 @@ export class Player {
   weapons: Weapon[] = [{ kind: 'R', level: 1 }, { kind: 'R', level: 1 }];
   slot = 0;
   cooldown = 0;
+  sinceShot = 99;
+  jumpHeld = false;
   invuln = 0;
   barrier = 0;
   armor = false;
@@ -138,8 +142,14 @@ export class Player {
 
     if (inp.pressed('jump') && ground) {
       if (down && this.onOneway()) { b.dropTimer = 14; b.y += 2; this.curl = false; }
-      else { b.vy = -this.def.jump; this.curl = true; g.audio.sfx('jump'); }
+      else { b.vy = -this.def.jump; this.curl = true; this.jumpHeld = true; g.audio.sfx('jump'); }
     }
+    // variable height: letting go of jump early cuts the rise short
+    if (this.jumpHeld && !inp.held('jump')) {
+      this.jumpHeld = false;
+      if (b.vy < -JUMP_CUT) b.vy = -JUMP_CUT;
+    }
+    if (b.vy >= 0) this.jumpHeld = false;
     b.vy = Math.min(MAXFALL, b.vy + GRAV);
     // keep inside the camera's left/right edges
     g.world.move(b);
@@ -155,11 +165,7 @@ export class Player {
 
     // ---- weapons ----
     if (inp.pressed('swap')) { this.slot = 1 - this.slot; g.audio.sfx('swap'); }
-    if (inp.held('shoot') && this.cooldown <= 0) {
-      const [mx, my, ang] = this.muzzle();
-      this.cooldown = fireWeapon(g, this.weapon, mx, my, ang);
-      if (this.weapon.kind !== 'F') g.addFx(new Anim(g, g.assets.fx.flash, mx, my, 2, 36, true));
-    }
+    this.tryFire(0);
     // ---- grappling hook ----
     if (inp.pressed('special') && !this.hook && this.hookCool <= 0) this.fireHook(up && dirX === 0);
     this.updateHook();
@@ -167,6 +173,21 @@ export class Player {
     // fell off the bottom of the screen
     if (b.y > g.gfx.camY + VH + 40) this.die(true);
     this.draw();
+  }
+
+  /**
+   * Mashing fires as fast as the weapon allows; holding the button auto-fires at a
+   * slower pace. The machine gun and flamethrower are full auto either way.
+   */
+  private tryFire(dy: number) {
+    const g = this.g, inp = g.input;
+    this.sinceShot++;
+    if (this.cooldown > 0 || !inp.held('shoot')) return;
+    if (!inp.pressed('shoot') && this.sinceShot < HOLD_RATE[this.weapon.kind]) return;
+    const [mx, my, ang] = this.muzzle();
+    this.cooldown = fireWeapon(g, this.weapon, mx, my + dy, ang);
+    this.sinceShot = 0;
+    if (this.weapon.kind !== 'F') g.addFx(new Anim(g, g.assets.fx.flash, mx, my + dy, 2, 36, true));
   }
 
   private onOneway() {
@@ -241,11 +262,8 @@ export class Player {
     b.vy = 0;
     h.x = tx; h.y = ty + 2;
     // can still shoot while reeling
-    if (g.input.held('shoot') && this.cooldown <= 0) {
-      this.aim = 'f';
-      const [mx, my, ang] = this.muzzle();
-      this.cooldown = fireWeapon(g, this.weapon, mx, my - 6, ang);
-    }
+    this.aim = 'f';
+    this.tryFire(-6);
     this.drawHook();
   }
   private drawHook() {
