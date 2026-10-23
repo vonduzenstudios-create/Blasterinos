@@ -81,6 +81,15 @@ export class SnowWorld extends World {
     const a = this.surf(x - 4), b = this.surf(x + 4);
     return isFinite(a) && isFinite(b) ? (b - a) / 8 : 0;
   }
+  /** The hills averaged over a stretch around x, leaning ahead: what the camera follows. */
+  groundLine(x: number) {
+    let sum = 0, n = 0;
+    for (let dx = -64; dx <= 96; dx += 8) {
+      const h = this.surf(x + dx);
+      if (isFinite(h)) { sum += h; n++; }
+    }
+    return n ? sum / n : Infinity;
+  }
   isIcy(x: number) { const i = Math.floor(x); return i >= 0 && i < this.icy.length && this.icy[i] === 1; }
   /** Set while moving a body: the fill under the snow is left to the surface, so slopes never snag. */
   private skipFill = false;
@@ -147,8 +156,10 @@ export class Stage4 implements Stage {
   readonly clearLines = ['THE OUTPOST HAS FALLEN. THE PASS IS OPEN.'];
   camMode: CamMode = 'scroll';
   lockT = 0;
-  /** Where the player's feet last touched down: the camera follows this, not each jump. */
+  /** Where the player's feet last touched down, for stretches with no snow to follow. */
   footY = 0;
+  /** The height of the ledge you last stood on, or NaN while on the snow itself. */
+  ledge = NaN;
   boss: Walker | null = null;
 
   constructor(public g: Game) {}
@@ -170,8 +181,9 @@ export class Stage4 implements Stage {
     this.camMode = 'scroll'; this.lockT = 0; this.boss = null;
     g.gfx.camX = cp === 0 ? 0 : cp === 1 ? CP1_CAM : ARENA_X - 60;
     const sx = cp === 0 ? 3 * TS : g.gfx.camX + 70;
-    this.footY = w.surf(sx);
-    g.gfx.camY = Math.max(0, Math.min(MAX_CAM_Y, this.footY - 148));
+    this.footY = w.surf(sx); this.ledge = NaN;
+    const gl = w.groundLine(sx);
+    g.gfx.camY = Math.max(0, Math.min(MAX_CAM_Y, (isFinite(gl) ? gl : w.surf(sx)) - 148));
     if (cp > 0) for (const s of g.spawns) if (s.x < g.gfx.camX + VW) s.done = true;
   }
 
@@ -185,13 +197,20 @@ export class Stage4 implements Stage {
     if (this.camMode === 'scroll') {
       const target = Math.min(p.body.x - 150, ARENA_X);
       if (target > gx.camX) gx.camX = Math.min(target, gx.camX + 4);
-      // the view rides the hills with your footing; a jump on its own doesn't move it,
-      // but a drop below the last foothold (or a climb far above it) does
-      const b = p.body;
-      if (b.onGround || b.y > this.footY) this.footY = b.y;
-      else this.footY = Math.min(this.footY, b.y + 100);
-      const ty = Math.max(0, Math.min(MAX_CAM_Y, this.footY - 148));
-      gx.camY += Math.max(-4, Math.min(4, (ty - gx.camY) * 0.12));
+      // the view follows a smoothed line of the hills around you, not your height, so
+      // jumps leave it alone and slopes never jerk it; it eases onto ledges you stand on
+      // and gives way if you drop below it
+      const b = p.body, w = this.sw;
+      const line = w.groundLine(b.x);
+      if (b.onGround) this.ledge = Math.abs(b.y - w.surf(b.x)) > 2 ? b.y : NaN;
+      if (b.onGround) this.footY = b.y;
+      // never let the line wander too far from where you are actually standing
+      let ref = isFinite(line) ? Math.max(this.footY - 40, Math.min(this.footY + 40, line)) : this.footY;
+      if (isFinite(this.ledge)) ref = this.ledge;
+      if (b.y > ref + 36) ref = b.y - 36;
+      const ty = Math.max(0, Math.min(MAX_CAM_Y, ref - 148));
+      const d = ty - gx.camY;
+      if (Math.abs(d) > 3) gx.camY += Math.max(-2.5, Math.min(2.5, d * 0.06));
       if (gx.camX >= CP1_CAM) g.checkpoint = Math.max(g.checkpoint, 1);
       if (gx.camX >= ARENA_X) {
         gx.camX = ARENA_X; this.camMode = 'boss'; this.lockT = 0; g.checkpoint = 2;
