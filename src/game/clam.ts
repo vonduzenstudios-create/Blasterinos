@@ -21,8 +21,8 @@ function splash(g: Game, x: number, y: number) {
 /** Glowing orbs lobbed in an arc. They skip along the sand a couple of times before they burst. */
 export class Pearl extends EnemyBullet {
   bounces = 0;
-  constructor(g: Game, x: number, y: number, vx: number, vy: number, public floor: number) {
-    super(g, x, y, vx, vy, g.assets.beach.pearl, 4, 0.13, 360, false);
+  constructor(g: Game, x: number, y: number, vx: number, vy: number, public floor: number, grav = 0.13) {
+    super(g, x, y, vx, vy, g.assets.beach.pearl, 4, grav, 360, false);
   }
   update() {
     super.update();
@@ -58,7 +58,11 @@ export class BigPearl extends Enemy {
   }
 }
 
-/** A water spout. Bubbles mark the spot first, then the column comes up through the sand. */
+/**
+ * A water spout, telegraphed twice: bubbles mark the spot, then a half-height burst
+ * (harmless, and too low to reach the rail) shows exactly where the column will be.
+ * It drops back, and a moment later the real column comes up full height.
+ */
 export class Geyser {
   dead = false;
   t = 0;
@@ -71,36 +75,43 @@ export class Geyser {
     this.col = g.gfx.sprite(a.geyser[0], 11);
     this.warn.visible = false; this.col.visible = false;
   }
+  /** Frames from the first bubbles to the deadly full burst. */
+  static readonly LEAD = 40 + 22 + 34;
   update() {
     const g = this.g, a = g.assets.beach;
     if (this.delay > 0) { this.delay--; return; }
     this.t++;
-    const WARN = 44;
+    const WARN = 40, TELL = WARN + 22, FULL = Geyser.LEAD;
     const w = this.warn;
-    w.visible = this.t < WARN + 6;
+    w.visible = this.t < FULL + 6;
     if (w.visible) {
-      w.setFrame(a.bubbles[Math.floor(this.t / 5) % 2]);
+      w.setFrame(a.bubbles[Math.floor(this.t / (this.t > TELL ? 3 : 5)) % 2]);
       w.x = this.x + Math.sin(this.t * 1.3); w.y = this.floor + 1; w.sync();
       if (this.t % 12 === 1) g.audio.sfx('hiss', 0.25);
     }
-    if (this.t === WARN) { g.audio.sfx('splash'); g.audio.sfx('rumble', 0.4); g.gfx.shake = Math.max(g.gfx.shake, 2); }
-    if (this.t >= WARN) {
-      const up = this.t < WARN + this.hold;
-      this.rise = up ? Math.min(1, this.rise + 0.16) : Math.max(0, this.rise - 0.06);
-      const c = this.col;
-      c.visible = this.rise > 0;
+    let target = 0;
+    if (this.t >= WARN && this.t < TELL) target = 0.42;          // the warning burst
+    else if (this.t >= FULL && this.t < FULL + this.hold) target = 1;
+    if (this.t === WARN) { g.audio.sfx('splash', 0.5); }
+    if (this.t === FULL) { g.audio.sfx('splash'); g.audio.sfx('rumble', 0.4); g.gfx.shake = Math.max(g.gfx.shake, 2); }
+    this.rise = this.rise < target ? Math.min(target, this.rise + 0.16) : Math.max(target, this.rise - 0.07);
+    const c = this.col;
+    c.visible = this.rise > 0;
+    if (c.visible) {
       c.setFrame(a.geyser[Math.floor(this.t / 4) % 3]);
       c.x = this.x; c.y = this.floor + 104 - this.rise * 100; c.sync();
-      if (this.t % 6 === 0 && this.rise > 0.5) splash(g, this.x + (this.t % 12 === 0 ? -10 : 10), this.floor);
-      // the column itself is deadly
+      if (this.t % 6 === 0 && this.rise > 0.3) splash(g, this.x + (this.t % 12 === 0 ? -10 : 10), this.floor);
+    }
+    // only the full column is deadly
+    if (this.t >= FULL && this.rise > 0.5) {
       const top = c.y - 96;
-      if (this.rise > 0.3) for (const p of g.livePlayers()) {
+      for (const p of g.livePlayers()) {
         if (!p.alive) continue;
         const b = p.box();
         if (b[2] > this.x - 10 && b[0] < this.x + 10 && b[3] > top && b[1] < this.floor) p.hurt();
       }
-      if (!up && this.rise <= 0) this.dead = true;
     }
+    if (this.t > FULL + this.hold && this.rise <= 0) this.dead = true;
   }
   destroy() { this.warn.remove(); this.col.remove(); }
 }
@@ -240,6 +251,9 @@ export class GiantClam implements Hittable {
   flashT = 0;
   cooldown = 60;
   attacks = 0;
+  geysers = 0;
+  /** Pearls left in a ground-level stream. */
+  stream = 0;
   enraged = false;
   hingeY: number;
   sink = 110;      // how far below its resting place it still is
@@ -284,6 +298,7 @@ export class GiantClam implements Hittable {
     const g = this.g;
     this.hp = 0;
     this.spinAng = 0;
+    this.stream = 0;
     this.set('dying');
     g.addScore(20000);
     g.audio.sfx('roar');
@@ -318,12 +333,14 @@ export class GiantClam implements Hittable {
         break;
       case 'spit': {
         this.openTo(MAX_OPEN * 0.8, 0.04);
-        const volleys = this.enraged ? [34, 58, 82, 106] : [40, 72, 104];
+        // volleys far enough apart to switch between the rail and the beach
+        const volleys = this.enraged ? [34, 92, 150] : [40, 110];
+        this.updateStream();
         for (const v of volleys) {
           if (this.modeT >= v - 6 && this.modeT < v + 4) this.blaze = true;
           if (this.modeT === v) this.spit();
         }
-        if (this.modeT > volleys[volleys.length - 1] + 30) this.close(90 * k);
+        if (this.modeT > volleys[volleys.length - 1] + 60) this.close(90 * k);
         break;
       }
       case 'roll': {
@@ -390,20 +407,26 @@ export class GiantClam implements Hittable {
         break;
       }
       case 'geyser': {
-        // clamps down tight and shudders, and the sand starts spouting
+        // clamps down tight and shudders, and the sand starts spouting: evenly spaced
+        // spouts across the open beach, going off one after another in a set order
         this.openTo(0, 0.08);
         g.gfx.shake = Math.max(g.gfx.shake, 0.8);
-        const n = this.enraged ? 3 : 2;
+        const n = this.enraged ? 5 : 4, gap = this.enraged ? 24 : 30;
         if (this.modeT === 10) {
           g.audio.sfx('bite');
-          for (let i = 0; i < n; i++) {
-            const p = g.livePlayers()[i % Math.max(1, g.livePlayers().length)] ?? g.player;
-            const [lo, hi] = this.dir < 0 ? [this.left + 20, this.hx - 90] : [this.hx + 90, this.right - 20];
-            const x = Math.max(lo, Math.min(hi, p.body.x + (i === 0 ? 0 : (i % 2 ? -1 : 1) * 46)));
-            g.misc.push(new Geyser(g, x, this.floor, i * 26, this.enraged ? 50 : 60));
-          }
+          const [lo, hi] = this.dir < 0 ? [this.left + 24, this.hx - 96] : [this.hx + 96, this.right - 24];
+          // alternate rounds: sweep away from the clam, then from the far edge back toward it
+          const order = Array.from({ length: n }, (_, i) => i);
+          if (this.geysers % 2 === 1) order.reverse();
+          order.forEach((spot, k) => {
+            const f = spot / (n - 1);
+            const x = this.dir < 0 ? hi - f * (hi - lo) : lo + f * (hi - lo);
+            g.misc.push(new Geyser(g, x, this.floor, k * gap, this.enraged ? 46 : 54));
+          });
+          this.geysers++;
         }
-        if (this.modeT > 150) { this.set('idle'); this.cooldown = 40 * k; }
+        const done = 10 + (n - 1) * gap + Geyser.LEAD + 60 + 20;
+        if (this.modeT > done) { this.set('idle'); this.cooldown = 30 * k; }
         break;
       }
       case 'crabs': {
@@ -444,23 +467,37 @@ export class GiantClam implements Hittable {
   }
   private close(cooldown: number) {
     this.set('idle');
+    this.stream = 0;
     this.cooldown = cooldown;
     this.g.audio.sfx('bite', 0.7);
   }
+  /**
+   * Two kinds of volley, picked by where the target is, each with a clear way out:
+   * up on the rail it fans pearls out level at rail height (drop down under them);
+   * on the beach it fires a low machine-gun stream along the sand (grapple up or jump it).
+   */
   private spit() {
     const g = this.g;
-    const [mx, my] = this.mouth;
-    const [px, py] = g.player.center();
-    const n = this.enraged ? 6 : 5;
-    const T = 50, grav = 0.13;
-    for (let i = 0; i < n; i++) {
-      const f = 0.45 + (i / (n - 1)) * 0.9;
-      const aimVx = ((px - mx) / T) * f + (Math.random() - 0.5) * 0.25;
-      const vx = this.dir < 0 ? Math.min(-0.6, aimVx) : Math.max(0.6, aimVx);
-      const vy = (py - my) / T - 0.5 * grav * T - 0.6 - i * 0.12;
-      g.eBullets.push(new Pearl(g, mx + this.dir * 10, my, vx, vy, this.floor));
-    }
-    g.audio.sfx('pearl');
+    const [mx] = this.mouth;
+    const p = g.player;
+    const high = p.state === 'hang' || p.state === 'reel' || p.state === 'hook' || p.body.y < this.floor - 40;
+    if (high) {
+      const n = this.enraged ? 6 : 5;
+      for (let i = 0; i < n; i++) {
+        const vy = -0.5 + (i / (n - 1)) * 0.85;
+        g.eBullets.push(new Pearl(g, mx + this.dir * 10, this.floor - 96, this.dir * 2.6, vy, this.floor, 0));
+      }
+      g.audio.sfx('pearl');
+    } else this.stream = this.enraged ? 10 : 8;
+  }
+  /** The ground volley: one pearl every few frames, skimming the sand. */
+  private updateStream() {
+    if (this.stream <= 0 || this.modeT % 5 !== 0) return;
+    const g = this.g, [mx] = this.mouth;
+    g.eBullets.push(new Pearl(g, mx + this.dir * 24, this.floor - 13, this.dir * 3.4, 0, this.floor, 0));
+    if (this.stream % 2 === 0) g.audio.sfx('pearl', 0.5);
+    this.blaze = true;
+    this.stream--;
   }
   private draw() {
     const g = this.g, a = g.assets.beach;
