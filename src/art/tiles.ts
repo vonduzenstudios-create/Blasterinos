@@ -2,9 +2,9 @@ import { Pix, rgb, mix } from '../engine/pixel';
 import { OUTLINE as OUTLINE_COLOR } from './humanoid';
 
 // Tile ids
-export const T = { E: 0, GROUND: 1, ROCK: 2, PLANK: 3, LEDGE: 4, METAL: 5, BRIDGE: 6, ROCKBG: 7 } as const;
-export const SOLID = new Set<number>([T.GROUND, T.ROCK, T.METAL]);
-export const ONEWAY = new Set<number>([T.PLANK, T.LEDGE, T.BRIDGE]);
+export const T = { E: 0, GROUND: 1, ROCK: 2, PLANK: 3, LEDGE: 4, METAL: 5, BRIDGE: 6, ROCKBG: 7, SAND: 8, SANDSTONE: 9, SCAFFOLD: 10 } as const;
+export const SOLID = new Set<number>([T.GROUND, T.ROCK, T.METAL, T.SAND, T.SANDSTONE]);
+export const ONEWAY = new Set<number>([T.PLANK, T.LEDGE, T.BRIDGE, T.SCAFFOLD]);
 export const TS = 16;
 
 export function hash(x: number, y: number, s = 0): number {
@@ -30,6 +30,8 @@ const C = {
   metal: [rgb('#1a1c24'), rgb('#2e3240'), rgb('#4a5064'), rgb('#6e768e'), rgb('#a4aec4')],
   rope: [rgb('#5a4426'), rgb('#9a7a44'), rgb('#c8a868')],
   stone: [rgb('#3a3a32'), rgb('#56564a'), rgb('#76766a'), rgb('#9a9a8a')],
+  sand: [rgb('#6a3e1e'), rgb('#9a5e2c'), rgb('#c4823e'), rgb('#e0a656'), rgb('#f6cc7e'), rgb('#fff0b8')],
+  mesa: [rgb('#3e1a14'), rgb('#6a2c1e'), rgb('#94442a'), rgb('#b8603a'), rgb('#d88a52'), rgb('#f0b478')],
 };
 
 export type TileGetter = (tx: number, ty: number) => number;
@@ -52,6 +54,9 @@ export function paintChunk(get: TileGetter, cx: number, cy: number, n: number): 
     else if (t === T.LEDGE) paintLedge(p, tx, ty, ox, oy, lf !== T.LEDGE, rt !== T.LEDGE);
     else if (t === T.BRIDGE) paintBridge(p, tx, ty, ox, oy);
     else if (t === T.ROCKBG) paintRockBg(p, tx, ty, ox, oy);
+    else if (t === T.SAND) paintSand(p, tx, ty, ox, oy, !solidish(up), !solidish(lf), !solidish(rt));
+    else if (t === T.SANDSTONE) paintSandstone(p, tx, ty, ox, oy, !solidish(up), !solidish(lf), !solidish(rt), !solidish(dn));
+    else if (t === T.SCAFFOLD) paintScaffold(p, tx, ty, ox, oy, lf !== T.SCAFFOLD, rt !== T.SCAFFOLD);
   }
   if (!any) return null;
   p.outline(OUTLINE_COLOR);
@@ -190,4 +195,79 @@ function paintBridge(p: Pix, tx: number, ty: number, ox: number, oy: number) {
     p.set(ox + x, oy - 9, C.rope[1]); p.set(ox + x, oy - 8, C.rope[0]);
   }
   for (const px of [0, 8]) for (let y = -10; y < 7; y++) p.set(ox + px + 2, oy + y, y < 0 ? C.wood[2] : C.wood[1]);
+}
+
+// ---------------------------------------------------------------- desert (stage 2)
+
+function paintSand(p: Pix, tx: number, ty: number, ox: number, oy: number, top: boolean, left: boolean, right: boolean) {
+  const S = C.sand;
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const wx = tx * TS + x, wy = ty * TS + y;
+    // packed sand with wavy strata that darken with depth
+    const strata = Math.sin(wy / 3.2 + vnoise(wx / 14, wy / 9, 81) * 5);
+    const n = vnoise(wx / 4, wy / 4, 82) * 0.6 + hash(wx, wy, 83) * 0.4;
+    let k = strata > 0.55 ? 3 : strata < -0.6 ? 1 : 2;
+    if (n > 0.82) k++; else if (n < 0.18) k--;
+    const depth = (ty - 26) * TS + y; // deeper rows get darker
+    if (depth > 40 && hash(wx, wy, 84) < Math.min(0.6, (depth - 40) / 80)) k--;
+    p.set(ox + x, oy + y, S[Math.max(0, Math.min(4, k))]);
+  }
+  // buried pebbles and bits of bone
+  if (hash(tx, ty, 85) < 0.2) { const bx = ox + 2 + Math.floor(hash(tx, ty, 86) * 11), by = oy + 4 + Math.floor(hash(tx, ty, 87) * 9); p.rect(bx, by, 3, 2, hash(tx, ty, 88) < 0.5 ? C.stone[1] : rgb('#e8dcc0')); p.set(bx, by + 1, S[0]); }
+  if (left) for (let y = 0; y < TS; y++) { p.set(ox, oy + y, S[0]); p.set(ox + 1, oy + y, S[1]); }
+  if (right) for (let y = 0; y < TS; y++) p.set(ox + TS - 1, oy + y, S[1]);
+  if (top) {
+    for (let x = 0; x < TS; x++) {
+      const wx = tx * TS + x;
+      // wind-blown crest: light top, ripples just below
+      const d = 3 + Math.round(vnoise(wx / 5, ty, 89) * 2);
+      for (let y = 0; y < d; y++) p.set(ox + x, oy + y, y === 0 ? S[5] : y === 1 ? S[4] : S[3]);
+      if ((wx + ty * 3) % 7 < 3) p.set(ox + x, oy + d + 1, S[4]);
+      // loose grains blown above the edge
+      if (hash(wx, ty, 90) < 0.12) p.set(ox + x, oy - 1, S[4]);
+    }
+    if (hash(tx, ty, 91) < 0.1) { // dry scrub
+      const sx = ox + 3 + Math.floor(hash(tx, ty, 92) * 10);
+      for (let i = 0; i < 4; i++) { p.set(sx - i, oy - 1 - Math.floor(i * 0.7), rgb('#6a6a2a')); p.set(sx + i, oy - 1 - Math.floor(i * 0.7), rgb('#8a8a3a')); }
+      p.set(sx, oy - 3, rgb('#a8a048'));
+    }
+  }
+}
+
+function paintSandstone(p: Pix, tx: number, ty: number, ox: number, oy: number, top: boolean, left: boolean, right: boolean, bottom: boolean) {
+  const M = C.mesa;
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const wx = tx * TS + x, wy = ty * TS + y;
+    // horizontal rock layers with cracks, the classic mesa look
+    const band = Math.floor((wy + vnoise(wx / 20, 0, 93) * 6) / 5);
+    let k = 2 + (band % 3 === 0 ? 1 : band % 3 === 1 ? 0 : -1);
+    if (vnoise(wx / 6, wy / 3, 94) > 0.7) k++;
+    const crack = Math.abs(vnoise(wx / 5, wy / 9, 95) - 0.5);
+    if (crack < 0.035) k = 0;
+    p.set(ox + x, oy + y, M[Math.max(0, Math.min(4, k))]);
+  }
+  if (left) for (let y = 0; y < TS; y++) { p.set(ox, oy + y, M[4]); p.set(ox + 1, oy + y, M[3]); }
+  if (right) for (let y = 0; y < TS; y++) { p.set(ox + TS - 1, oy + y, M[0]); p.set(ox + TS - 2, oy + y, M[1]); }
+  if (bottom) for (let x = 0; x < TS; x++) p.set(ox + x, oy + TS - 1, M[0]);
+  if (top) for (let x = 0; x < TS; x++) {
+    const wx = tx * TS + x;
+    p.set(ox + x, oy, M[5]); p.set(ox + x, oy + 1, M[4]);
+    // sand drifted onto the top
+    const drift = Math.round(vnoise(wx / 6, ty, 96) * 3);
+    for (let y = 0; y < drift; y++) p.set(ox + x, oy - 1 - y + drift, C.sand[4 - Math.min(1, y)]);
+  }
+}
+
+function paintScaffold(p: Pix, tx: number, ty: number, ox: number, oy: number, endL: boolean, endR: boolean) {
+  // sun-bleached boards on a steel frame
+  const W = C.wood, Mt = C.metal;
+  for (let x = 0; x < TS; x++) {
+    const gap = (x + tx * 3) % 6 === 5;
+    for (let y = 0; y < 4; y++) if (!gap) p.set(ox + x, oy + y, y === 0 ? rgb('#e8c890') : y === 1 ? W[4] : W[3]);
+    p.set(ox + x, oy + 4, Mt[1]); p.set(ox + x, oy + 5, Mt[0]);
+  }
+  // cross braces under the boards
+  for (let i = 0; i < 8; i++) { p.set(ox + i * 2, oy + 6 + i, Mt[2]); p.set(ox + TS - 1 - i * 2, oy + 6 + i, Mt[1]); }
+  if (endL) for (let y = 0; y < 14; y++) p.set(ox + 1, oy + y, Mt[3]);
+  if (endR) for (let y = 0; y < 14; y++) p.set(ox + TS - 2, oy + y, Mt[1]);
 }

@@ -7,6 +7,11 @@ and music. There are no image or audio files in the repo.
 **Stage 1, Venom Falls:** fight through the jungle, break the fortress gate, climb the
 waterfall and take down the three-headed hydra that lives in the lake at the top.
 
+**Stage 2, Scorched Dunes:** ride shotgun in a jeep tearing across the desert while dirt
+bikers and an attack gunship chase you down, until something enormous erupts out of the
+road and flips the jeep. Finish on foot over dunes, mesas and quicksand to the nest of the
+Great Dune Worm. Clearing stage 1 rolls straight into stage 2 with your weapons.
+
 ## Play
 
 ```bash
@@ -45,6 +50,13 @@ Hold down while standing to go prone.
 - **Mid-boss:** a fortress gate with two cannons and a core.
 - **Boss:** a hydra whose body rises from the lake in the background. Destroy its three
   heads, then its exposed core while its claws slam the ledge from the foreground.
+- **Stage 2:** on the jeep you can shuffle along the bed, jump and duck while you shoot.
+  The gunship sweeps over to bomb the jeep. The Dune Worm only takes real damage when its
+  head peels open, either to spit sand or after it bursts up under you (watch for the
+  shaking mound). It also sends baby worms through the sand.
+
+Testing shortcut: `/?stage=2` starts on stage 2 after soldier select, and `&cp=1` or
+`&cp=2` starts from its on-foot or boss checkpoint.
 
 ## How it is built
 
@@ -59,5 +71,7 @@ Hold down while standing to go prone.
 - **`src/engine/audio.ts`** synthesizes all sound with the Web Audio API (pulse waves,
   filtered saw bass, noise drums), and **`src/game/music.ts`** holds the songs as step
   sequences with generated bass, arpeggio and drum parts.
-- **`src/game/`** holds the gameplay: player, weapons, enemies, bosses, level layout and the
-  game state machine. The waterfall and water are small GLSL shaders.
+- **`src/game/`** holds the gameplay: player, weapons, enemies, bosses and the game state
+  machine. Each stage implements the `Stage` interface (`stage.ts`): `stage1.ts` with
+  `level.ts` and `boss.ts` for Venom Falls, `stage2.ts` with `vehicles.ts` and `worm.ts`
+  for Scorched Dunes. The waterfall, water and quicksand are small GLSL shaders.

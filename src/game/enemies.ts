@@ -28,7 +28,7 @@ export class EnemyBullet {
     const g = this.g;
     this.t++;
     this.vy += this.grav;
-    this.x += this.vx; this.y += this.vy;
+    this.x += this.vx + g.scrollVx; this.y += this.vy;
     if (--this.life <= 0) this.dead = true;
     if (this.x < g.gfx.camX - 40 || this.x > g.gfx.camX + VW + 40 || this.y < g.gfx.camY - 60 || this.y > g.gfx.camY + VH + 40) this.dead = true;
     if (this.solid && g.world.solidAtPx(this.x, this.y)) { this.dead = true; g.addFx(new Anim(g, g.assets.fx.spark, this.x, this.y, 2, 42, true)); }
@@ -65,6 +65,8 @@ export abstract class Enemy implements Hittable {
   invulnerable = false;
   deflect = false;
   boomSize: 'S' | 'M' | 'L' = 'M';
+  /** Flying things spawned during the jeep ride keep pace with the scrolling view. */
+  carried = false;
   constructor(public g: Game, x: number, y: number, f: Frame, z = 20) {
     this.x = x; this.y = y;
     this.sprite = g.gfx.sprite(f, z);
@@ -317,7 +319,7 @@ export class Drone extends Enemy {
   update() {
     const g = this.g;
     const [px, py] = g.player.center();
-    this.x += this.vx;
+    this.x += this.vx + (this.carried ? g.scrollVx : 0);
     // drift toward a height above the player
     this.baseY += Math.sign(py - 70 - this.baseY) * 0.3;
     this.y = this.baseY + Math.sin(this.t / 18) * 14;
@@ -385,7 +387,7 @@ export class Capsule extends Enemy {
   }
   box(): [number, number, number, number] { return [this.x - 10, this.y - 6, this.x + 10, this.y + 6]; }
   update() {
-    this.x += this.dir * 2.3;
+    this.x += this.dir * 2.3 + (this.carried ? this.g.scrollVx : 0);
     this.y = this.baseY + Math.sin(this.t / 22) * 18;
     this.baseUpdate();
     const s = this.sprite;
@@ -415,8 +417,13 @@ export class Pickup {
     const g = this.g, b = this.body;
     this.t++;
     b.vy = Math.min(3, b.vy + 0.15);
+    const prevY = b.y;
+    b.x += g.scrollVx;
     g.world.move(b);
     if (b.onGround) b.vx = 0;
+    // can land on the jeep while it is moving
+    const d = g.stage.deck();
+    if (d && b.vy >= 0 && b.x > d.x0 - 6 && b.x < d.x1 + 6 && prevY <= d.y + 4 && b.y >= d.y) { b.y = d.y; b.vy = 0; b.vx = 0; b.onGround = true; }
     if (b.y > g.gfx.camY + VH + 20 || b.x < g.gfx.camX - 30) this.dead = true;
     const p = g.player;
     if (p.alive) {

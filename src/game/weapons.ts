@@ -72,7 +72,7 @@ export class PlayerBullet {
     if (this.kind === 'F') {
       this.vx *= 0.985; this.vy = this.vy * 0.985 - 0.02;
     }
-    this.x += this.vx; this.y += this.vy;
+    this.x += this.vx + g.scrollVx; this.y += this.vy;
     this.life--;
     if (this.life <= 0) this.dead = true;
     const cx = g.gfx.camX, cy = g.gfx.camY;

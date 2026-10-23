@@ -7,14 +7,17 @@ import { World } from './world';
 import { Player, HEROES, type HeroDef } from './player';
 import { PlayerBullet, WEAPON_NAMES, type Hittable } from './weapons';
 import { Enemy, EnemyBullet, Pickup, Runner, Rifleman, Turret, Leaper, Drone, Crawler, Capsule, RunnerSpawner } from './enemies';
-import { Gate, Hydra } from './boss';
-import { buildWorld, buildSpawns, buildScenery, buildDecor, SHAFT_X, GATE_CAM_X, JUNGLE_CAM_Y, ARENA_FLOOR, LAKE_Y, GROUND, MAP_H, type Spawn, type Scenery } from './level';
+import { SHAFT_X, JUNGLE_CAM_Y, type Spawn, type Scenery } from './level';
 import { TS } from '../art/tiles';
-import { STAGE_SONG, BOSS_SONG, TITLE_SONG, CLEAR_SONG, GAMEOVER_SONG, READY_SONG } from './music';
+import { TITLE_SONG, CLEAR_SONG, GAMEOVER_SONG, READY_SONG } from './music';
 import { explode } from './effects';
+import type { Stage } from './stage';
+import { Stage1 } from './stage1';
+import { Stage2 } from './stage2';
+import type { Weapon } from './weapons';
 
 type Mode = 'title' | 'select' | 'intro' | 'play' | 'paused' | 'gameover' | 'clear';
-type CamMode = 'scroll' | 'gate' | 'climb' | 'boss';
+const STAGES = [Stage1, Stage2];
 
 interface Updatable { dead: boolean; update(): void; destroy(): void; }
 interface FloatText { text: string; x: number; y: number; t: number; }
@@ -40,9 +43,10 @@ export class Game {
   fx: Updatable[] = [];
   misc: Updatable[] = [];
   spawns: Spawn[] = [];
-  gate: Gate | null = null;
-  hydra: Hydra | null = null;
-  camMode: CamMode = 'scroll';
+  stage!: Stage;
+  stageIdx = 0;
+  /** How fast the view is being carried along (the jeep ride); shots and riders move with it. */
+  scrollVx = 0;
   checkpoint = 0;
   lives = 3;
   score = 0;
@@ -66,19 +70,17 @@ export class Game {
 
   boot() {
     this.assets = buildAssets();
+    this.setStage(0);
     this.buildScene(0);
     this.setMode('title');
   }
 
-  get bossActive() { return this.camMode === 'gate' || this.camMode === 'boss'; }
+  get bossActive() { return this.stage.bossActive; }
   addFx(f: Updatable) { this.fx.push(f); }
   addScore(n: number) { this.score += n; if (this.score > this.hiScore) this.hiScore = this.score; }
   flashText(text: string, x: number, y: number) { this.texts.push({ text, x, y, t: 0 }); }
   targets(): Hittable[] {
-    const out: Hittable[] = [...this.enemies];
-    if (this.gate) out.push(...this.gate.parts());
-    if (this.hydra) out.push(...this.hydra.parts());
-    return out;
+    return [...this.enemies, ...this.stage.parts()];
   }
 
   setMode(m: Mode) {
@@ -91,44 +93,41 @@ export class Game {
   // ---------------------------------------------------------------- scene setup
   private clearEntities() {
     for (const list of [this.enemies, this.pBullets, this.eBullets, this.pickups, this.fx, this.misc] as Updatable[][]) { for (const e of list) e.destroy(); list.length = 0; }
-    this.gate?.destroy(); this.gate = null;
-    this.hydra?.destroy(); this.hydra = null;
+    this.stage?.destroy();
     this.player?.destroy();
+  }
+  setStage(i: number) {
+    if (this.sceneReady) this.clearEntities();
+    this.sceneReady = false;
+    this.stageIdx = i;
+    this.stage = new STAGES[i](this);
   }
   buildScene(cp: number) {
     if (this.sceneReady) this.clearEntities();
     this.gfx.clear();
-    this.world = buildWorld();
-    if (cp > 0) this.world.fill(197, 80, 199, GROUND - 1, 0); // gate already destroyed
-    this.world.build(this.gfx);
-    this.scenery = buildScenery(this.gfx, this.assets);
-    buildDecor(this.gfx, this.assets);
-    this.spawns = buildSpawns();
+    this.scrollVx = 0;
+    this.stage.build(cp);
     this.checkpoint = cp;
-    if (cp === 0) {
-      this.gfx.camX = 0; this.gfx.camY = JUNGLE_CAM_Y; this.camMode = 'scroll';
-      this.gate = new Gate(this, 196 * TS - 8, GROUND * TS);
-    } else if (cp === 1) {
-      this.gfx.camX = SHAFT_X; this.gfx.camY = JUNGLE_CAM_Y; this.camMode = 'climb';
-      for (const s of this.spawns) if (s.x < SHAFT_X) s.done = true;
-    } else {
-      this.gfx.camX = SHAFT_X; this.gfx.camY = 0; this.camMode = 'climb';
-      for (const s of this.spawns) s.done = true;
-    }
     this.sceneReady = true;
   }
-  startStage(cp: number) {
+  /** Start (or restart) the current stage at a checkpoint. Weapons carry over between stages. */
+  startStage(cp: number, carry?: Weapon[]) {
     this.buildScene(cp);
-    const starts = [[3 * TS, GROUND * TS - 40], [SHAFT_X + 60, GROUND * TS - 40], [SHAFT_X + 60, ARENA_FLOOR + 3 * TS]];
-    const [x, y] = starts[cp];
+    const { x, y, after } = this.stage.start(cp);
     this.player = new Player(this, this.hero, x, y);
+    if (carry) this.player.weapons = carry.map((w) => ({ ...w }));
     this.player.respawn(x, y);
     this.player.invuln = 60;
-    if (cp === 2) { this.player.body.y = 15 * TS; this.player.body.vy = -5.5; this.gfx.camY = 0; }
+    after?.();
     this.banner = null;
     this.texts = [];
     this.setMode('intro');
     this.audio.play(READY_SONG);
+  }
+  private toTitle() {
+    this.setStage(0);
+    this.buildScene(0);
+    this.setMode('title');
   }
 
   // ---------------------------------------------------------------- main update
@@ -140,7 +139,7 @@ export class Game {
       case 'select': this.updateSelect(); break;
       case 'intro':
         this.updateWorld(false);
-        if (this.modeT > 130) { this.setMode('play'); this.audio.play(this.hydra ? BOSS_SONG : STAGE_SONG); }
+        if (this.modeT > 130) { this.setMode('play'); this.audio.play(this.stage.inBoss ? this.stage.bossSong : this.stage.song); }
         break;
       case 'play':
         if (this.input.pressed('start')) { this.setMode('paused'); this.audio.sfx('pause'); this.audio.musicBus && (this.audio.musicBus.gain.value = 0.1); break; }
@@ -153,8 +152,11 @@ export class Game {
       case 'clear':
         this.updateWorld(false);
         if (this.modeT > 240 && (this.input.pressed('start') || this.input.pressed('jump'))) {
-          this.buildScene(0);
-          this.setMode('title');
+          if (this.stageIdx + 1 < STAGES.length) {
+            const carry = this.player.weapons;
+            this.setStage(this.stageIdx + 1);
+            this.startStage(0, carry);
+          } else this.toTitle();
         }
         break;
     }
@@ -171,7 +173,7 @@ export class Game {
     const k = (this.titleCam % (span * 2));
     this.gfx.camX = k < span ? k : span * 2 - k;
     this.gfx.camY = JUNGLE_CAM_Y;
-    this.gate?.update();
+    this.stage.update();
     if (this.modeT > 30 && (this.input.pressed('start') || this.input.pressed('jump') || this.input.pressed('shoot'))) {
       this.audio.init();
       this.audio.sfx('select');
@@ -185,7 +187,11 @@ export class Game {
       this.audio.sfx('select');
       this.hero = HEROES[this.selectIdx];
       this.lives = 3; this.score = 0; this.continues = 3;
-      this.startStage(0);
+      // ?stage=2 (and optionally &cp=1 or 2) jumps straight to a later stage for testing
+      const q = new URLSearchParams(location.search);
+      const st = Math.max(1, Math.min(STAGES.length, parseInt(q.get('stage') || '1') || 1)) - 1;
+      if (st !== this.stageIdx) this.setStage(st);
+      this.startStage(Math.max(0, Math.min(2, parseInt(q.get('cp') || '0') || 0)));
     }
     if (i.pressed('special')) this.setMode('title');
   }
@@ -196,20 +202,18 @@ export class Game {
       if (this.modeT > 60 && (i.pressed('start') || i.pressed('jump') || i.pressed('shoot'))) {
         this.audio.sfx('select');
         if (this.menuIdx === 0) { this.continues--; this.lives = 3; this.score = 0; this.startStage(this.checkpoint); }
-        else { this.buildScene(0); this.setMode('title'); }
+        else this.toTitle();
       }
-    } else if (this.modeT > 120 && (i.pressed('start') || i.pressed('jump'))) { this.buildScene(0); this.setMode('title'); }
+    } else if (this.modeT > 120 && (i.pressed('start') || i.pressed('jump'))) this.toTitle();
   }
 
   private updateWorld(live: boolean) {
     const p = this.player;
     if (live || this.mode === 'intro' || this.mode === 'clear') p.update();
     if (this.mode === 'clear' && p.body.onGround) p.body.vx = 0;
-    this.updateCamera();
+    this.stage.updateCamera();
     this.activateSpawns();
-    this.gate?.update();
-    if (this.gate?.dead) { this.gate.destroy(); this.gate = null; }
-    this.hydra?.update();
+    this.stage.update();
     const step = (list: Updatable[]) => {
       for (const e of list) if (!e.dead) e.update();
       for (let k = list.length - 1; k >= 0; k--) if (list[k].dead) { list[k].destroy(); list.splice(k, 1); }
@@ -245,38 +249,6 @@ export class Game {
     }
   }
 
-  private updateCamera() {
-    const g = this.gfx, p = this.player;
-    const px = p.body.x, py = p.body.y;
-    switch (this.camMode) {
-      case 'scroll': {
-        const target = Math.min(px - 150, SHAFT_X);
-        if (target > g.camX) g.camX = Math.min(target, g.camX + 4);
-        if (this.gate && g.camX >= GATE_CAM_X) { g.camX = GATE_CAM_X; this.camMode = 'gate'; this.gate.active = true; this.audio.sfx('alarm'); this.banner = { text: 'WARNING', sub: 'FORTRESS GATE', t: 120 }; }
-        if (g.camX >= SHAFT_X) {
-          g.camX = SHAFT_X; this.camMode = 'climb'; this.checkpoint = Math.max(this.checkpoint, 1);
-          this.banner = { text: 'CLIMB THE FALLS', sub: this.input.lastDevice === 'gamepad' ? 'PRESS Y TO GRAPPLE' : 'PRESS C OR L TO GRAPPLE', t: 0 };
-        }
-        break;
-      }
-      case 'gate': break;
-      case 'climb': {
-        // near the top, pull the view all the way up to frame the arena
-        const target = py < 17 * TS ? 0 : Math.max(0, py - 130);
-        if (target < g.camY) g.camY = Math.max(target, g.camY - 4);
-        if (g.camY <= 0 && py < 16 * TS && !this.hydra) {
-          g.camY = 0; this.camMode = 'boss'; this.checkpoint = 2;
-          this.hydra = new Hydra(this, SHAFT_X + VW / 2, LAKE_Y, ARENA_FLOOR);
-          this.audio.play(BOSS_SONG);
-          this.banner = { text: 'WARNING', sub: 'HYDRA OF THE FALLS', t: 60 };
-          for (const e of this.enemies) e.dead = true;
-        }
-        break;
-      }
-      case 'boss': g.camY = 0; break;
-    }
-  }
-
   private activateSpawns() {
     const g = this.gfx;
     for (const s of this.spawns) {
@@ -286,6 +258,7 @@ export class Game {
       if (!(inX && inY)) continue;
       s.done = true;
       const edgeX = g.camX + VW + 16;
+      const before = this.enemies.length;
       switch (s.kind) {
         case 'runners': this.misc.push(new RunnerSpawner(this, s.arg[0], s.arg[1], s.arg[2])); break;
         case 'rifle': this.enemies.push(new Rifleman(this, s.x, s.y)); break;
@@ -296,7 +269,10 @@ export class Game {
         case 'drone': this.enemies.push(new Drone(this, s.arg < 0 ? Math.max(s.x, edgeX) : g.camX - 16, s.y - 30, s.arg)); break;
         case 'crawler': this.enemies.push(new Crawler(this, s.x, s.y, s.arg)); break;
         case 'capsule': this.enemies.push(new Capsule(this, g.camX - 16, s.y, s.arg, 1)); break;
+        default: this.stage.spawn(s);
       }
+      // during the jeep ride, flyers keep pace with the view instead of whipping past
+      for (let k = before; k < this.enemies.length; k++) this.enemies[k].carried = this.scrollVx > 0;
     }
   }
 
@@ -304,6 +280,7 @@ export class Game {
   onPlayerDead() {
     this.lives--;
     if (this.lives <= 0) { this.menuIdx = 0; this.setMode('gameover'); return; }
+    if (this.stage.respawn()) return;
     // drop back in Contra style, near where the player was
     const g = this.gfx, p = this.player;
     const want = Math.max(g.camX + 30, Math.min(g.camX + VW - 30, p.lastSafe.x));
@@ -319,12 +296,9 @@ export class Game {
     }
     p.respawn(p.lastSafe.x, p.lastSafe.y - 40);
   }
-  onMidBossDefeated() {
-    this.camMode = 'scroll';
-    this.banner = { text: 'GATE DESTROYED', t: 120 };
-  }
+  onMidBossDefeated() { this.stage.onMidBossDefeated(); }
   onBossDefeated() {
-    this.hydra?.destroy(); this.hydra = null;
+    this.stage.onBossDefeated();
     this.addScore(this.lives * 5000);
     this.setMode('clear');
     try { localStorage.setItem('blasterinos.hi', String(this.hiScore)); } catch { /* ignore */ }
@@ -358,9 +332,9 @@ export class Game {
     if (p.def.armor) drawText(c, p.armor ? 'ARMOR' : 'ARMOR ' + Math.ceil(p.armorRegen / 60), 6, 44, p.armor ? '#7ae0ff' : '#5a6070');
     if (p.barrier > 0) drawText(c, 'BARRIER ' + Math.ceil(p.barrier / 60), 6, p.def.armor ? 54 : 44, '#d080ff');
     // boss bar
-    const bossHp = this.hydra ? [this.hydra.totalHp(), this.hydra.maxHp(), 'HYDRA'] : this.gate && this.gate.active ? [this.gate.core.hp + this.gate.cannons.reduce((a, k) => a + Math.max(0, k.hp), 0), 77, 'GATE'] : null;
-    if (bossHp && !(this.hydra && this.hydra.phase === 'rise')) {
-      const [hp, max, name] = bossHp as [number, number, string];
+    const bossHp = this.stage.bossBar();
+    if (bossHp) {
+      const [hp, max, name] = bossHp;
       const bw = 140, bx = VW / 2 - bw / 2, by = 18;
       drawText(c, name, VW / 2, 8, '#ff8080', { align: 'center' });
       c.fillStyle = '#120d16'; c.fillRect(bx - 2, by - 2, bw + 4, 8);
@@ -377,9 +351,9 @@ export class Game {
     }
     if (this.mode === 'intro') {
       c.fillStyle = 'rgba(8,6,16,0.55)'; c.fillRect(0, 70, VW, 56);
-      drawText(c, 'STAGE 1', VW / 2, 80, '#ffd040', { align: 'center', scale: 2 });
-      drawText(c, 'VENOM FALLS', VW / 2, 102, '#ffffff', { align: 'center' });
-      if (this.checkpoint === 0) {
+      drawText(c, 'STAGE ' + this.stage.num, VW / 2, 80, '#ffd040', { align: 'center', scale: 2 });
+      drawText(c, this.stage.name, VW / 2, 102, '#ffffff', { align: 'center' });
+      if (this.checkpoint === 0 && this.stageIdx === 0) {
         const hint = this.input.lastDevice === 'gamepad' ? 'X SHOOT  A JUMP  Y GRAPPLE  RB LOCK AIM  B SWAP' : 'X SHOOT  Z JUMP  C GRAPPLE  SHIFT LOCK AIM  V SWAP';
         drawText(c, hint, VW / 2, 190, '#c8c0e0', { align: 'center' });
       }
@@ -402,8 +376,10 @@ export class Game {
       c.fillStyle = `rgba(8,6,16,${Math.min(0.6, this.modeT / 90)})`; c.fillRect(0, 0, VW, VH);
       drawText(c, 'STAGE CLEAR!', VW / 2, 50, '#ffd040', { align: 'center', scale: 3 });
       if (this.modeT > 60) drawText(c, 'SCORE ' + this.score, VW / 2, 92, '#ffffff', { align: 'center', scale: 2 });
-      if (this.modeT > 100) drawText(c, 'THE HYDRA OF VENOM FALLS IS NO MORE.', VW / 2, 124, '#c8c0e0', { align: 'center' });
-      if (this.modeT > 140) drawText(c, 'THANKS FOR PLAYING THE BLASTERINOS TECH DEMO', VW / 2, 140, '#c8c0e0', { align: 'center' });
+      this.stage.clearLines.forEach((l, k) => { if (this.modeT > 100 + k * 20) drawText(c, l, VW / 2, 124 + k * 12, '#c8c0e0', { align: 'center' }); });
+      const last = this.stageIdx + 1 >= STAGES.length;
+      const y = 128 + this.stage.clearLines.length * 12;
+      if (this.modeT > 160) drawText(c, last ? 'THANKS FOR PLAYING THE BLASTERINOS TECH DEMO' : 'NEXT: STAGE ' + (this.stage.num + 1), VW / 2, y, last ? '#c8c0e0' : '#ffd040', { align: 'center' });
       if (this.modeT > 240 && this.modeT % 60 < 40) drawText(c, 'PRESS START', VW / 2, 180, '#ffffff', { align: 'center' });
     }
   }
