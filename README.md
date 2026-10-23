@@ -60,6 +60,34 @@ Hold down while standing to go prone.
 Testing shortcut: `/?stage=2` starts on stage 2 after soldier select, and `&cp=1` or
 `&cp=2` starts from its on-foot or boss checkpoint.
 
+## Online co-op
+
+Pick **ONLINE CO-OP** on the title screen. One player hosts and gets a four letter code
+(or an invite link); the other joins with it. Each player picks a soldier and the stage
+starts when both are ready. Lives are a shared pool of six, and the camera waits for
+whoever is behind.
+
+**How it stays cheap on bandwidth:** both browsers run the whole game in deterministic
+lockstep. Only button presses cross the network (10 bits per player per frame, sent two
+frames to a packet), so each player uses roughly 2 KB/s including TCP overhead and the
+server does nothing but relay. Random rolls come from a shared seed. The cost is a few
+frames of input delay (it adapts to the ping), and if one player's connection stalls,
+both games pause until it catches up. Every two seconds the two games compare a hash of
+their state and show OUT OF SYNC if they ever disagree.
+
+The relay lives in `server/` (Node + `ws`, no build step) and deploys to Render from
+`render.yaml`:
+
+1. In the Render dashboard choose **New > Blueprint**, connect this repo and apply it.
+   That creates a free web service called `blasterinos-net`.
+2. If Render gives it a URL other than `https://blasterinos-net.onrender.com`, add a
+   repository variable `NET_URL` (Settings > Secrets and variables > Actions > Variables)
+   set to `wss://<your-service>.onrender.com` and re-run the Pages deploy.
+
+A free Render service sleeps after 15 idle minutes, so the first connection can take up to
+a minute. To test locally: `cd server && npm install && npm start`, then open
+`http://localhost:5173/?server=ws://localhost:8080` in two windows.
+
 ## How it is built
 
 - **Three.js + Vite + TypeScript.** The scene renders through an orthographic camera at
@@ -73,6 +101,8 @@ Testing shortcut: `/?stage=2` starts on stage 2 after soldier select, and `&cp=1
 - **`src/engine/audio.ts`** synthesizes all sound with the Web Audio API (pulse waves,
   filtered saw bass, noise drums), and **`src/game/music.ts`** holds the songs as step
   sequences with generated bass, arpeggio and drum parts.
+- **`src/net/`** is online co-op: `lockstep.ts` syncs inputs and steps the game, and
+  `lobby.ts` is the host / join panel.
 - **`src/game/`** holds the gameplay: player, weapons, enemies, bosses and the game state
   machine. Each stage implements the `Stage` interface (`stage.ts`): `stage1.ts` with
   `level.ts` and `boss.ts` for Venom Falls, `stage2.ts` with `vehicles.ts` and `worm.ts`

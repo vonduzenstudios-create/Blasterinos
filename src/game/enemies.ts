@@ -32,8 +32,8 @@ export class EnemyBullet {
     if (--this.life <= 0) this.dead = true;
     if (this.x < g.gfx.camX - 40 || this.x > g.gfx.camX + VW + 40 || this.y < g.gfx.camY - 60 || this.y > g.gfx.camY + VH + 40) this.dead = true;
     if (this.solid && g.world.solidAtPx(this.x, this.y)) { this.dead = true; g.addFx(new Anim(g, g.assets.fx.spark, this.x, this.y, 2, 42, true)); }
-    const p = g.player;
-    if (p && p.alive) {
+    for (const p of g.livePlayers()) {
+      if (!p.alive || this.dead) continue;
       const b = p.box();
       if (this.x + this.r > b[0] && this.x - this.r < b[2] && this.y + this.r > b[1] && this.y - this.r < b[3]) {
         if (p.invuln <= 0 && p.barrier <= 0) { this.dead = true; p.hurt(); }
@@ -96,9 +96,10 @@ export abstract class Enemy implements Hittable {
     this.offscreenT = out ? this.offscreenT + 1 : 0;
     if (this.offscreenT > 90) this.dead = true;
     // contact damage
-    if (this.touch && g.player.alive) {
-      const a = this.box(), b = g.player.box();
-      if (a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]) g.player.hurt();
+    if (this.touch) for (const p of g.livePlayers()) {
+      if (!p.alive) continue;
+      const a = this.box(), b = p.box();
+      if (a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]) p.hurt();
     }
   }
   abstract update(): void;
@@ -425,8 +426,8 @@ export class Pickup {
     const d = g.stage.deck();
     if (d && b.vy >= 0 && b.x > d.x0 - 6 && b.x < d.x1 + 6 && prevY <= d.y + 4 && b.y >= d.y) { b.y = d.y; b.vy = 0; b.vx = 0; b.onGround = true; }
     if (b.y > g.gfx.camY + VH + 20 || b.x < g.gfx.camX - 30) this.dead = true;
-    const p = g.player;
-    if (p.alive) {
+    for (const p of g.livePlayers()) {
+      if (!p.alive || this.dead) continue;
       const pb = p.box();
       if (b.x + 10 > pb[0] && b.x - 10 < pb[2] && b.y > pb[1] && b.y - 16 < pb[3]) {
         this.dead = true;

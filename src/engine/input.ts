@@ -4,7 +4,16 @@
 
 export type Button = 'left' | 'right' | 'up' | 'down' | 'jump' | 'shoot' | 'special' | 'swap' | 'lock' | 'start';
 
-const BUTTONS: Button[] = ['left', 'right', 'up', 'down', 'jump', 'shoot', 'special', 'swap', 'lock', 'start'];
+export const BUTTONS: Button[] = ['left', 'right', 'up', 'down', 'jump', 'shoot', 'special', 'swap', 'lock', 'start'];
+
+/** What the simulation reads: one per player. The local device and network inputs both fit it. */
+export interface Pad {
+  readonly lastDevice: 'keyboard' | 'gamepad';
+  held(b: Button): boolean;
+  pressed(b: Button): boolean;
+  released(b: Button): boolean;
+  anyPressed(): boolean;
+}
 
 const KEYMAP: Record<string, Button> = {
   ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
@@ -17,7 +26,7 @@ const KEYMAP: Record<string, Button> = {
   Enter: 'start', Escape: 'start', KeyP: 'start',
 };
 
-export class Input {
+export class Input implements Pad {
   private keys = new Set<Button>();
   private tapped = new Set<Button>(); // pressed and released between two updates
   private down: Record<Button, boolean> = {} as any;
@@ -28,6 +37,7 @@ export class Input {
   constructor() {
     for (const b of BUTTONS) { this.down[b] = false; this.prev[b] = false; }
     window.addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLInputElement) return; // typing a room code
       const b = KEYMAP[e.code];
       if (b) { if (!e.repeat) this.tapped.add(b); this.keys.add(b); e.preventDefault(); this.lastDevice = 'keyboard'; }
       this.interact();
@@ -72,5 +82,19 @@ export class Input {
   held(b: Button) { return this.down[b]; }
   pressed(b: Button) { return this.down[b] && !this.prev[b]; }
   released(b: Button) { return !this.down[b] && this.prev[b]; }
+  anyPressed() { return BUTTONS.some((b) => this.pressed(b) && b !== 'left' && b !== 'right' && b !== 'up' && b !== 'down'); }
+  /** Buttons held this update as a bitmask (bit i = BUTTONS[i]), for sending over the network. */
+  bits() { let m = 0; BUTTONS.forEach((b, i) => { if (this.down[b]) m |= 1 << i; }); return m; }
+}
+
+/** A pad driven by bitmasks, one per simulation frame (a remote player, or the local one delayed). */
+export class PadState implements Pad {
+  cur = 0; prev = 0;
+  constructor(private device: Input) {}
+  get lastDevice() { return this.device.lastDevice; }
+  set(bits: number) { this.prev = this.cur; this.cur = bits; }
+  held(b: Button) { return (this.cur & (1 << BUTTONS.indexOf(b))) !== 0; }
+  pressed(b: Button) { const m = 1 << BUTTONS.indexOf(b); return (this.cur & m) !== 0 && (this.prev & m) === 0; }
+  released(b: Button) { const m = 1 << BUTTONS.indexOf(b); return (this.cur & m) === 0 && (this.prev & m) !== 0; }
   anyPressed() { return BUTTONS.some((b) => this.pressed(b) && b !== 'left' && b !== 'right' && b !== 'up' && b !== 'down'); }
 }

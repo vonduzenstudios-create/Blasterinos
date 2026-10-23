@@ -1,5 +1,5 @@
 import { Gfx, VW, VH } from '../engine/gfx';
-import { Input } from '../engine/input';
+import { Input, type Pad } from '../engine/input';
 import { audio, type Audio } from '../engine/audio';
 import { drawText } from '../engine/font';
 import { buildAssets, type Assets } from './assets';
@@ -24,7 +24,20 @@ interface FloatText { text: string; x: number; y: number; t: number; }
 
 export class Game {
   gfx: Gfx;
-  input = new Input();
+  /** The keyboard and gamepads on this machine. */
+  device = new Input();
+  /** One pad per player. Locally that is just the device; online, the synced inputs. */
+  pads: Pad[] = [this.device];
+  /** Menus answer to any player. */
+  menuPad: Pad = this.device;
+  /** The pad the code running right now should read (a player's own while it updates). */
+  input: Pad = this.device;
+  /** Online co-op: the simulation is stepped by the lockstep driver with synced inputs. */
+  net = false;
+  netStart = { stage: 0, cp: 0 };
+  /** Set while a DOM overlay (the online lobby) has focus, so the title ignores keys. */
+  inputBlocked = false;
+  onOnline: (() => void) | null = null;
   audio: Audio = audio;
   assets!: Assets;
   hud: CanvasRenderingContext2D;
@@ -34,8 +47,17 @@ export class Game {
 
   world!: World;
   scenery!: Scenery;
-  player!: Player;
-  hero: HeroDef = HEROES[0];
+  players: Player[] = [];
+  /** Players who ran out of lives and sit out until a continue. */
+  out = new Set<Player>();
+  heroDefs: HeroDef[] = [HEROES[0]];
+  /**
+   * Stage and enemy code is written against a single `player`. With two players this
+   * points at whoever matters for the code running now: the player being updated, the
+   * one nearest the enemy being updated, the one leading the camera.
+   */
+  private focus: Player | null = null;
+  get player(): Player { return this.focus ?? this.players[0]; }
   enemies: Enemy[] = [];
   pBullets: PlayerBullet[] = [];
   eBullets: EnemyBullet[] = [];
@@ -55,6 +77,9 @@ export class Game {
   texts: FloatText[] = [];
   banner: { text: string; sub?: string; t: number } | null = null;
   selectIdx = 0;
+  selectIdxs = [0, 1];
+  ready = [false, false];
+  titleIdx = 0;
   menuIdx = 0;
   titleCam = 0;
   private sceneReady = false;
@@ -64,7 +89,7 @@ export class Game {
     hudCanvas.width = VW; hudCanvas.height = VH;
     this.hud = hudCanvas.getContext('2d')!;
     this.hud.imageSmoothingEnabled = false;
-    this.input.onFirstInteraction = () => { this.audio.init(); };
+    this.device.onFirstInteraction = () => { this.audio.init(); };
     try { this.hiScore = parseInt(localStorage.getItem('blasterinos.hi') || '0') || 0; } catch { /* storage unavailable */ }
   }
 
@@ -76,6 +101,26 @@ export class Game {
   }
 
   get bossActive() { return this.stage.bossActive; }
+  get coop() { return this.pads.length > 1; }
+  get stageCount() { return STAGES.length; }
+  /** Players still in the game (alive, or dying and about to drop back in). */
+  livePlayers() { return this.players.filter((p) => !this.out.has(p)); }
+  padOf(p: Player) { return this.pads[this.players.indexOf(p)] ?? this.device; }
+  nearestPlayer(x: number, y: number): Player {
+    let best: Player | null = null, bd = Infinity;
+    for (const p of this.livePlayers()) {
+      if (!p.alive) continue;
+      const d = Math.abs(p.body.x - x) + Math.abs(p.body.y - y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best ?? this.livePlayers()[0] ?? this.players[0];
+  }
+  /** Whoever is furthest along (right or up) drives the camera. */
+  private leader(): Player {
+    let best: Player | null = null;
+    for (const p of this.livePlayers()) if (p.alive && (!best || p.body.x - p.body.y > best.body.x - best.body.y)) best = p;
+    return best ?? this.livePlayers()[0] ?? this.players[0];
+  }
   addFx(f: Updatable) { this.fx.push(f); }
   addScore(n: number) { this.score += n; if (this.score > this.hiScore) this.hiScore = this.score; }
   flashText(text: string, x: number, y: number) { this.texts.push({ text, x, y, t: 0 }); }
@@ -94,7 +139,9 @@ export class Game {
   private clearEntities() {
     for (const list of [this.enemies, this.pBullets, this.eBullets, this.pickups, this.fx, this.misc] as Updatable[][]) { for (const e of list) e.destroy(); list.length = 0; }
     this.stage?.destroy();
-    this.player?.destroy();
+    for (const p of this.players) p.destroy();
+    this.players = [];
+    this.focus = null;
   }
   setStage(i: number) {
     if (this.sceneReady) this.clearEntities();
@@ -111,13 +158,18 @@ export class Game {
     this.sceneReady = true;
   }
   /** Start (or restart) the current stage at a checkpoint. Weapons carry over between stages. */
-  startStage(cp: number, carry?: Weapon[]) {
+  startStage(cp: number, carry?: Weapon[][]) {
     this.buildScene(cp);
     const { x, y, after } = this.stage.start(cp);
-    this.player = new Player(this, this.hero, x, y);
-    if (carry) this.player.weapons = carry.map((w) => ({ ...w }));
-    this.player.respawn(x, y);
-    this.player.invuln = 60;
+    this.out.clear();
+    this.players = this.pads.map((_, i) => {
+      const px = x + i * 20;
+      const p = new Player(this, this.heroDefs[i] ?? this.heroDefs[0], px, y);
+      if (carry?.[i]) p.weapons = carry[i].map((w) => ({ ...w }));
+      p.respawn(px, y);
+      p.invuln = 60;
+      return p;
+    });
     after?.();
     this.banner = null;
     this.texts = [];
@@ -127,13 +179,37 @@ export class Game {
   private toTitle() {
     this.setStage(0);
     this.buildScene(0);
+    if (this.net) { this.ready = [false, false]; this.setMode('select'); return; } // online: back to soldier select
     this.setMode('title');
+  }
+
+  /**
+   * Enter online co-op: both machines call this with the same options, then step the
+   * game with the same inputs each frame, so the two simulations stay identical.
+   */
+  startNet(pads: Pad[], menuPad: Pad, opts: { stage: number; cp: number }) {
+    this.net = true;
+    this.pads = pads; this.menuPad = menuPad; this.input = menuPad;
+    this.netStart = opts;
+    this.t = 0; this.titleCam = 0; this.texts = []; this.banner = null; this.gfx.shake = 0;
+    this.selectIdxs = [0, 1]; this.ready = [false, false];
+    this.setStage(0);
+    this.buildScene(0);
+    this.setMode('select');
+  }
+  /** Back to single player on this machine (partner left or the connection dropped). */
+  endNet() {
+    this.net = false;
+    this.pads = [this.device]; this.menuPad = this.device; this.input = this.device;
+    this.heroDefs = [this.heroDefs[0] ?? HEROES[0]];
+    this.toTitle();
   }
 
   // ---------------------------------------------------------------- main update
   update() {
     this.t++; this.modeT++;
-    this.input.update();
+    if (!this.net) this.device.update();
+    this.input = this.menuPad;
     switch (this.mode) {
       case 'title': this.updateTitle(); break;
       case 'select': this.updateSelect(); break;
@@ -153,7 +229,7 @@ export class Game {
         this.updateWorld(false);
         if (this.modeT > 240 && (this.input.pressed('start') || this.input.pressed('jump'))) {
           if (this.stageIdx + 1 < STAGES.length) {
-            const carry = this.player.weapons;
+            const carry = this.players.map((p) => p.weapons);
             this.setStage(this.stageIdx + 1);
             this.startStage(0, carry);
           } else this.toTitle();
@@ -174,18 +250,23 @@ export class Game {
     this.gfx.camX = k < span ? k : span * 2 - k;
     this.gfx.camY = JUNGLE_CAM_Y;
     this.stage.update();
-    if (this.modeT > 30 && (this.input.pressed('start') || this.input.pressed('jump') || this.input.pressed('shoot'))) {
+    if (this.inputBlocked) return;
+    const i = this.input;
+    if (i.pressed('up') || i.pressed('down')) { this.titleIdx = 1 - this.titleIdx; this.audio.sfx('menu'); }
+    if (this.modeT > 30 && (i.pressed('start') || i.pressed('jump') || i.pressed('shoot'))) {
       this.audio.init();
       this.audio.sfx('select');
-      this.setMode('select');
+      if (this.titleIdx === 1 && this.onOnline) this.onOnline();
+      else this.setMode('select');
     }
   }
   private updateSelect() {
+    if (this.coop) return this.updateCoopSelect();
     const i = this.input;
     if (i.pressed('left') || i.pressed('right')) { this.selectIdx = 1 - this.selectIdx; this.audio.sfx('menu'); }
     if (this.modeT > 10 && (i.pressed('start') || i.pressed('jump') || i.pressed('shoot'))) {
       this.audio.sfx('select');
-      this.hero = HEROES[this.selectIdx];
+      this.heroDefs = [HEROES[this.selectIdx]];
       this.lives = 3; this.score = 0; this.continues = 3;
       // ?stage=2 (and optionally &cp=1 or 2) jumps straight to a later stage for testing
       const q = new URLSearchParams(location.search);
@@ -195,27 +276,55 @@ export class Game {
     }
     if (i.pressed('special')) this.setMode('title');
   }
+  /** Each player picks a soldier with their own pad; the stage starts when both are ready. */
+  private updateCoopSelect() {
+    this.pads.forEach((pad, k) => {
+      if (!this.ready[k] && (pad.pressed('left') || pad.pressed('right'))) { this.selectIdxs[k] = 1 - this.selectIdxs[k]; this.audio.sfx('menu'); }
+      if (this.modeT > 10 && !this.ready[k] && (pad.pressed('start') || pad.pressed('jump') || pad.pressed('shoot'))) { this.ready[k] = true; this.audio.sfx('select'); }
+      else if (this.ready[k] && pad.pressed('special')) this.ready[k] = false;
+    });
+    if (this.ready.slice(0, this.pads.length).every((r) => r)) {
+      this.heroDefs = this.pads.map((_, k) => HEROES[this.selectIdxs[k]]);
+      this.lives = 3 * this.pads.length; this.score = 0; this.continues = 3;
+      if (this.netStart.stage !== this.stageIdx) this.setStage(this.netStart.stage);
+      this.startStage(this.netStart.cp);
+    }
+  }
   private updateGameOver() {
     const i = this.input;
     if (this.continues > 0) {
       if (i.pressed('up') || i.pressed('down')) { this.menuIdx = 1 - this.menuIdx; this.audio.sfx('menu'); }
       if (this.modeT > 60 && (i.pressed('start') || i.pressed('jump') || i.pressed('shoot'))) {
         this.audio.sfx('select');
-        if (this.menuIdx === 0) { this.continues--; this.lives = 3; this.score = 0; this.startStage(this.checkpoint); }
+        if (this.menuIdx === 0) { this.continues--; this.lives = 3 * this.pads.length; this.score = 0; this.startStage(this.checkpoint); }
         else this.toTitle();
       }
     } else if (this.modeT > 120 && (i.pressed('start') || i.pressed('jump'))) this.toTitle();
   }
 
   private updateWorld(live: boolean) {
-    const p = this.player;
-    if (live || this.mode === 'intro' || this.mode === 'clear') p.update();
-    if (this.mode === 'clear' && p.body.onGround) p.body.vx = 0;
+    const run = live || this.mode === 'intro' || this.mode === 'clear';
+    this.players.forEach((p, k) => {
+      if (this.out.has(p)) return;
+      this.focus = p; this.input = this.pads[k];
+      if (run) p.update();
+      if (this.mode === 'clear' && p.body.onGround) p.body.vx = 0;
+    });
+    this.input = this.menuPad;
+    this.focus = this.cameraFocus();
     this.stage.updateCamera();
     this.activateSpawns();
+    // bosses take turns picking on each player
+    const live2 = this.livePlayers().filter((p) => p.alive);
+    this.focus = live2.length ? live2[Math.floor(this.t / 180) % live2.length] : this.leader();
     this.stage.update();
     const step = (list: Updatable[]) => {
-      for (const e of list) if (!e.dead) e.update();
+      for (const e of list) {
+        if (e.dead) continue;
+        const a = e as any, x = a.x ?? a.body?.x, y = a.y ?? a.body?.y;
+        this.focus = typeof x === 'number' ? this.nearestPlayer(x, y) : null;
+        e.update();
+      }
       for (let k = list.length - 1; k >= 0; k--) if (list[k].dead) { list[k].destroy(); list.splice(k, 1); }
     };
     step(this.misc);
@@ -228,6 +337,23 @@ export class Game {
     for (const t of this.texts) t.t++;
     this.texts = this.texts.filter((t) => t.t < 60);
     if (this.banner) { this.banner.t++; if (this.banner.t > 240) this.banner = null; }
+    this.focus = null;
+  }
+
+  /**
+   * Who the stage camera follows. In co-op it may not scroll on and leave a partner
+   * behind, so the leader is reported no further ahead than the stages' camera rules
+   * (target = x - 150, y - 130) allow while keeping the other player on screen.
+   * Forced autoscroll (the jeep ride) still wins.
+   */
+  private cameraFocus(): Player {
+    const lead = this.leader();
+    const ps = this.livePlayers().filter((p) => p.alive);
+    if (ps.length < 2 || this.scrollVx > 0) return lead;
+    const x = Math.min(lead.body.x, Math.min(...ps.map((p) => p.body.x)) + 144);
+    const y = Math.max(lead.body.y, Math.max(...ps.map((p) => p.body.y)) - 56);
+    if (x === lead.body.x && y === lead.body.y) return lead;
+    return Object.create(lead, { body: { value: { ...lead.body, x, y } } });
   }
 
   private collide() {
@@ -277,9 +403,17 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- events
+  /** Called by the player whose death animation just finished (it is `this.player` then). */
   onPlayerDead() {
     this.lives--;
-    if (this.lives <= 0) { this.menuIdx = 0; this.setMode('gameover'); return; }
+    if (this.lives <= 0) {
+      // out of lives: sit out, and it is game over once nobody is left (lives are shared in co-op)
+      const p = this.player;
+      this.out.add(p);
+      p.sprite.visible = false; p.shieldSprite.visible = false;
+      if (this.livePlayers().length === 0) { this.menuIdx = 0; this.setMode('gameover'); }
+      return;
+    }
     if (this.stage.respawn()) return;
     // drop back in Contra style, near where the player was
     const g = this.gfx, p = this.player;
@@ -310,7 +444,7 @@ export class Game {
     c.clearRect(0, 0, VW, VH);
     if (this.mode === 'title') return this.drawTitle();
     if (this.mode === 'select') return this.drawSelect();
-    const p = this.player;
+    const p = this.players[0];
     // lives as medals
     const medal = this.assets.fx.medal.canvas;
     drawText(c, '1P', 6, 5, '#7ac0ff');
@@ -331,6 +465,7 @@ export class Game {
     drawText(c, WEAPON_NAMES[p.weapon.kind], 60, 30, '#c8c0e0');
     if (p.def.armor) drawText(c, p.armor ? 'ARMOR' : 'ARMOR ' + Math.ceil(p.armorRegen / 60), 6, 44, p.armor ? '#7ae0ff' : '#5a6070');
     if (p.barrier > 0) drawText(c, 'BARRIER ' + Math.ceil(p.barrier / 60), 6, p.def.armor ? 54 : 44, '#d080ff');
+    if (this.coop) this.drawCoopHud();
     // boss bar
     const bossHp = this.stage.bossBar();
     if (bossHp) {
@@ -383,6 +518,34 @@ export class Game {
       if (this.modeT > 240 && this.modeT % 60 < 40) drawText(c, 'PRESS START', VW / 2, 180, '#ffffff', { align: 'center' });
     }
   }
+  /** Player 2's weapons on the right, and a 1P / 2P tag over each soldier. */
+  private drawCoopHud() {
+    const c = this.hud;
+    const q = this.players[1];
+    if (q) {
+      drawText(c, '2P', VW - 6, 15, '#ff7a7a', { align: 'right' });
+      if (this.out.has(q)) drawText(c, 'OUT', VW - 6, 30, '#8a84a0', { align: 'right' });
+      else {
+        for (let i = 0; i < 2; i++) {
+          const w = q.weapons[i];
+          const x = VW - 28 - (1 - i) * 26, y = 26;
+          const active = i === q.slot;
+          c.fillStyle = active ? '#ffd040' : '#3a3450';
+          c.fillRect(x - 1, y - 1, 24, 16);
+          c.fillStyle = '#120d16'; c.fillRect(x, y, 22, 14);
+          drawText(c, w.kind, x + 3, y + 4, active ? '#ffffff' : '#8a84a0');
+          for (let l = 0; l < w.level; l++) { c.fillStyle = active ? '#ff5050' : '#6a3040'; c.fillRect(x + 12 + l * 4, y + 9, 3, 3); }
+        }
+        drawText(c, WEAPON_NAMES[q.weapon.kind], VW - 60, 30, '#c8c0e0', { align: 'right' });
+        if (q.def.armor) drawText(c, q.armor ? 'ARMOR' : 'ARMOR ' + Math.ceil(q.armorRegen / 60), VW - 6, 44, q.armor ? '#7ae0ff' : '#5a6070', { align: 'right' });
+        if (q.barrier > 0) drawText(c, 'BARRIER ' + Math.ceil(q.barrier / 60), VW - 6, q.def.armor ? 54 : 44, '#d080ff', { align: 'right' });
+      }
+    }
+    this.players.forEach((pl, i) => {
+      if (this.out.has(pl) || !pl.sprite.visible) return;
+      drawText(c, i === 0 ? '1P' : '2P', pl.body.x - this.gfx.camX, pl.body.y - this.gfx.camY - 38, i === 0 ? '#7ac0ff' : '#ff7a7a', { align: 'center' });
+    });
+  }
   private drawControls(y: number) {
     const c = this.hud;
     const pad = this.input.lastDevice === 'gamepad';
@@ -411,7 +574,10 @@ export class Game {
     drawText(c, logo, VW / 2, y, '#fff0a0', { align: 'center', scale: 4, shadow: null });
     c.restore();
     drawText(c, 'A CODE-GENERATED RUN AND GUN TECH DEMO', VW / 2, y + 36, '#c8c0e0', { align: 'center' });
-    if (this.modeT % 60 < 42) drawText(c, 'PRESS START', VW / 2, 120, '#ffffff', { align: 'center', scale: 2 });
+    ['1 PLAYER', 'ONLINE CO-OP'].forEach((label, k) => {
+      const sel = k === this.titleIdx;
+      drawText(c, (sel && this.modeT % 60 < 42 ? '> ' : '  ') + label, VW / 2 - 44, 110 + k * 14, sel ? '#ffffff' : '#8a84a0', { scale: sel ? 1 : 1 });
+    });
     this.drawControls(146);
     drawText(c, 'HI ' + String(this.hiScore).padStart(7, '0'), VW / 2, 8, '#ffd040', { align: 'center' });
   }
@@ -419,9 +585,10 @@ export class Game {
     const c = this.hud;
     c.fillStyle = 'rgba(8,6,20,0.75)'; c.fillRect(0, 0, VW, VH);
     drawText(c, 'SELECT YOUR SOLDIER', VW / 2, 14, '#ffffff', { align: 'center', scale: 2 });
+    const coop = this.coop;
     HEROES.forEach((h, i) => {
       const cx = VW / 2 + (i === 0 ? -90 : 90);
-      const sel = i === this.selectIdx;
+      const sel = coop ? this.selectIdxs.includes(i) : i === this.selectIdx;
       c.fillStyle = sel ? '#ffd040' : '#3a3450';
       c.fillRect(cx - 62, 38, 124, 150);
       c.fillStyle = sel ? '#2a2040' : '#14101e';
@@ -436,7 +603,12 @@ export class Game {
         for (let k = 0; k < 5; k++) { c.fillStyle = k < v ? (sel ? '#ff5050' : '#6a3040') : '#2a2438'; c.fillRect(cx + 4 + k * 9, y, 7, 6); }
       };
       stat('SPEED', h.id === 'ryder' ? 5 : 3, 176 - 2);
+      if (coop) this.selectIdxs.forEach((s, k) => {
+        if (s !== i) return;
+        const tag = (k === 0 ? '1P' : '2P') + (this.ready[k] ? ' OK' : '');
+        drawText(c, tag, k === 0 ? cx - 56 : cx + 56, 44, k === 0 ? '#7ac0ff' : '#ff7a7a', { align: k === 0 ? 'left' : 'right' });
+      });
     });
-    if (this.modeT % 60 < 42) drawText(c, '< >  CHOOSE    START  CONFIRM', VW / 2, 200, '#c8c0e0', { align: 'center' });
+    if (this.modeT % 60 < 42) drawText(c, coop ? '< >  CHOOSE    START  READY    Y / C  BACK' : '< >  CHOOSE    START  CONFIRM', VW / 2, 200, '#c8c0e0', { align: 'center' });
   }
 }

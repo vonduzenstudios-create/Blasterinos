@@ -226,9 +226,10 @@ class Head implements Hittable {
     }
     if (this.mode !== 'dead') this.facing = px >= this.x ? 1 : -1;
     // only the bite itself is deadly; a head stuck in the rock is safe to stand next to
-    if (this.mode === 'lunge' && g.player.alive) {
-      const a = this.box(), b = g.player.box();
-      if (a[0] + 4 < b[2] && a[2] - 4 > b[0] && a[1] + 4 < b[3] && a[3] - 4 > b[1]) g.player.hurt();
+    if (this.mode === 'lunge') for (const p of g.livePlayers()) {
+      if (!p.alive) continue;
+      const a = this.box(), b = p.box();
+      if (a[0] + 4 < b[2] && a[2] - 4 > b[0] && a[1] + 4 < b[3] && a[3] - 4 > b[1]) p.hurt();
     }
     this.draw();
   }
@@ -343,9 +344,10 @@ class Claw implements Hittable {
         if (this.y > floor + 140) { this.set('hidden'); if (this.dead) { this.sprite.visible = false; this.arm.visible = false; } }
         break;
     }
-    if ((this.mode === 'slam' || this.mode === 'hold') && g.player.alive) {
-      const a = this.box(), b = g.player.box();
-      if (a[0] + 8 < b[2] && a[2] - 8 > b[0] && a[1] < b[3] && a[3] > b[1]) g.player.hurt();
+    if (this.mode === 'slam' || this.mode === 'hold') for (const p of g.livePlayers()) {
+      if (!p.alive) continue;
+      const a = this.box(), b = p.box();
+      if (a[0] + 8 < b[2] && a[2] - 8 > b[0] && a[1] < b[3] && a[3] > b[1]) p.hurt();
     }
     this.draw();
   }

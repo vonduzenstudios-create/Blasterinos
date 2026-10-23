@@ -1,6 +1,10 @@
 // All sound is synthesized with the Web Audio API: chiptune-style pulse waves,
 // a filtered saw synth bass, noise drums, and one-shot sound effects.
 
+// Captured at load, before online co-op seeds Math.random for the shared simulation:
+// sound must never draw from that sequence, since only one side may have audio running.
+const nativeRandom = Math.random;
+
 type Inst = 'lead' | 'lead2' | 'bass' | 'arp' | 'drums' | 'pad';
 
 interface NoteEv { step: number; midi: number; len: number; }
@@ -58,7 +62,7 @@ export class Audio {
     const len = ctx.sampleRate;
     this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < len; i++) d[i] = nativeRandom() * 2 - 1;
     for (const duty of [0.125, 0.25, 0.5]) this.waves['p' + duty] = this.pulseWave(duty);
     if (this.pendingSong) { const s = this.pendingSong; this.pendingSong = null; this.play(s); }
   }
@@ -103,7 +107,7 @@ export class Audio {
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(out);
-    s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+    s.start(t, nativeRandom() * 0.5); s.stop(t + dur + 0.02);
   }
 
   // ---------- sound effects ----------
