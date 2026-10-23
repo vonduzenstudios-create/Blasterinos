@@ -409,14 +409,28 @@ export class Pickup {
   sprite: Sprite;
   body: Body;
   t = 0;
-  constructor(public g: Game, x: number, y: number, public kind: WeaponKind | 'B') {
+  /** Frames before it can be collected (a dropped weapon must not be re-grabbed instantly). */
+  noGrab = 0;
+  /** Frames left before a dropped weapon vanishes; 0 = never. */
+  life = 0;
+  constructor(public g: Game, x: number, y: number, public kind: WeaponKind | 'B', public level = 1) {
     this.sprite = g.gfx.sprite(g.assets.fx.falcon[kind][0], 26);
     this.body = makeBody(x, y, 16, 12);
     this.body.vy = -3.5; this.body.vx = 0.6;
   }
+  /** The weapon a player just swapped out pops out of them so they can go back for it. */
+  static dropped(g: Game, x: number, y: number, w: { kind: WeaponKind; level: number }, facing: number) {
+    const p = new Pickup(g, x, y, w.kind, w.level);
+    p.body.vy = -4.5; p.body.vx = -facing * 1.4;
+    p.noGrab = 50;
+    p.life = 60 * 12;
+    return p;
+  }
   update() {
     const g = this.g, b = this.body;
     this.t++;
+    if (this.noGrab > 0) this.noGrab--;
+    if (this.life > 0 && --this.life === 0) { this.dead = true; return; }
     b.vy = Math.min(3, b.vy + 0.15);
     const prevY = b.y;
     b.x += g.scrollVx;
@@ -427,20 +441,26 @@ export class Pickup {
     if (d && b.vy >= 0 && b.x > d.x0 - 6 && b.x < d.x1 + 6 && prevY <= d.y + 4 && b.y >= d.y) { b.y = d.y; b.vy = 0; b.vx = 0; b.onGround = true; }
     if (b.y > g.gfx.camY + VH + 20 || b.x < g.gfx.camX - 30) this.dead = true;
     for (const p of g.livePlayers()) {
-      if (!p.alive || this.dead) continue;
+      if (!p.alive || this.dead || this.noGrab > 0) continue;
       const pb = p.box();
       if (b.x + 10 > pb[0] && b.x - 10 < pb[2] && b.y > pb[1] && b.y - 16 < pb[3]) {
         this.dead = true;
         g.audio.sfx('pickup');
         if (this.kind === 'B') p.barrier = 60 * 12;
-        else p.giveWeapon(this.kind);
+        else {
+          const old = p.giveWeapon(this.kind, this.level);
+          if (old) g.pickups.push(Pickup.dropped(g, p.body.x, p.body.y - 14, old, p.facing));
+        }
         g.addScore(1000);
         g.flashText(this.kind === 'B' ? 'BARRIER!' : this.kind + ' GET!', b.x, b.y - 24);
       }
     }
     const s = this.sprite;
     s.setFrame(g.assets.fx.falcon[this.kind][Math.floor(this.t / 8) % 2]);
-    s.x = b.x; s.y = b.y; s.sync();
+    s.x = b.x; s.y = b.y;
+    // blink while it can't be grabbed yet and as it is about to vanish
+    s.visible = !((this.noGrab > 0 || (this.life > 0 && this.life < 120)) && this.t % 6 < 3);
+    s.sync();
   }
   destroy() { this.sprite.remove(); }
 }

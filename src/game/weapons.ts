@@ -105,7 +105,13 @@ export function fireWeapon(g: Game, w: Weapon, x: number, y: number, ang: number
       return 5;
     case 'M': {
       const sp = 7, j = (Math.random() - 0.5) * 0.06;
-      add(new PlayerBullet(g, 'M', x, y, Math.cos(ang + j) * sp, Math.sin(ang + j) * sp, w.level > 1 ? 1.5 : 1));
+      const vx = Math.cos(ang + j) * sp, vy = Math.sin(ang + j) * sp;
+      if (w.level > 1) {
+        // level 2: two parallel streams, side by side across the aim line
+        const ox = -s * 3, oy = c * 3;
+        add(new PlayerBullet(g, 'M', x + ox, y + oy, vx, vy, 1));
+        add(new PlayerBullet(g, 'M', x - ox, y - oy, vx, vy, 1));
+      } else add(new PlayerBullet(g, 'M', x, y, vx, vy, 1));
       g.audio.sfx('machine');
       return w.level > 1 ? 4 : 5;
     }
