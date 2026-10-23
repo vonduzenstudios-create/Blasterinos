@@ -37,9 +37,9 @@ export function run() {
   groups.push(['abyssal clam', [b.shell, ...b.core, ...b.pearl, b.bigPearl, ...b.geyser, ...b.bubbles, ...b.crab, b.crabEyes, ...b.fish]]);
   const sn = buildSnow();
   groups.push(['snow backdrops', [asFrame(sn.sky), asFrame(sn.peaks), asFrame(sn.firs), asFrame(sn.near)]]);
-  groups.push(['snow props', [...sn.pine, sn.rock, sn.cane, sn.pole, sn.lamp, sn.pile, sn.workshop, ...sn.thinIce]]);
-  groups.push(['snow foes', [...sn.snowman, ...sn.snowball, sn.bigball, ...sn.puff, ...sn.wave, ...sn.skier, sn.skierAir]]);
-  groups.push(['santa', [...sn.santa.stand, ...sn.santa.walk, sn.santa.crouch, sn.santa.air, sn.santa.laugh, sn.santa.down, sn.arm, ...sn.sack, ...sn.present, sn.shadow]]);
+  groups.push(['snow props', [...sn.pine, sn.rock, sn.beacon, sn.mast, sn.lamp, sn.crates, sn.outpost, ...sn.thinIce]]);
+  groups.push(['snow foes', [...sn.grenadier, ...sn.grenade, ...sn.snowball, sn.boulder, ...sn.puff, ...sn.wave, ...sn.skier, sn.skierAir]]);
+  groups.push(['glacier walker', [...sn.walker.stand, ...sn.walker.walk, sn.walker.crouch, sn.walker.air, sn.walker.vent, sn.walker.down, sn.arm, ...sn.hammer, sn.mine, ...sn.scrap, sn.shadow]]);
   const hv = buildHive();
   groups.push(['hive backdrops', [asFrame(hv.sky), asFrame(hv.far), asFrame(hv.near)]]);
   groups.push(['hive props', [...hv.pod, hv.tendril, hv.eggCluster, hv.bones, ...hv.pustule, ...hv.egg, ...hv.plasma]]);

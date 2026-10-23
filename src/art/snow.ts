@@ -3,17 +3,17 @@ import { OUTLINE, drawHumanoid, AX, AY, type Look, type Pose } from './humanoid'
 import { vnoise, hash, TS } from './tiles';
 import { dither } from './backgrounds';
 
-// Stage 4, "Snowland": winter backdrops, the snowy ground painter, props, the
-// snowmen, ski troopers and rolling snowballs, and Santa with his sack.
+// Stage 4, "Snowland": winter backdrops, the snowy ground painter, the arctic
+// outpost props, grenadiers, ski troopers, ice boulders and the Glacier Walker.
 
 export interface SnowArt {
   sky: HTMLCanvasElement; peaks: HTMLCanvasElement; firs: HTMLCanvasElement; near: HTMLCanvasElement;
-  pine: Frame[]; rock: Frame; cane: Frame; pole: Frame; workshop: Frame; pile: Frame; lamp: Frame;
-  snowman: Frame[]; snowball: Frame[]; bigball: Frame; puff: Frame[]; wave: Frame[]; shard: Frame;
+  pine: Frame[]; rock: Frame; beacon: Frame; mast: Frame; outpost: Frame; crates: Frame; lamp: Frame;
+  grenadier: Frame[]; grenade: Frame[]; snowball: Frame[]; boulder: Frame; puff: Frame[]; wave: Frame[]; shard: Frame;
   skier: Frame[]; skierAir: Frame;
   thinIce: Frame[];
-  santa: { stand: Frame[]; walk: Frame[]; crouch: Frame; air: Frame; laugh: Frame; down: Frame };
-  arm: Frame; sack: Frame[]; present: Frame[]; shadow: Frame;
+  walker: { stand: Frame[]; walk: Frame[]; crouch: Frame; air: Frame; vent: Frame; down: Frame };
+  arm: Frame; hammer: Frame[]; mine: Frame; scrap: Frame[]; shadow: Frame;
 }
 
 /** Tile ids for the Snowland map (its own set, painted by paintSnowChunk). */
@@ -298,30 +298,6 @@ function rockFrame(): Frame {
   return frame(p, 16, 19);
 }
 
-function caneFrame(): Frame {
-  const p = new Pix(16, 44);
-  const red = rgb('#d82030'), white = rgb('#fff4f4');
-  const col = (x: number, y: number) => ((x + y) >> 2) % 2 === 0 ? red : white;
-  for (let y = 10; y < 44; y++) for (let x = 7; x < 11; x++) p.set(x, y, col(x, y));
-  for (let a = 0; a <= Math.PI; a += 0.04) for (let r = 4; r < 8; r++) {
-    const x = 8 - Math.cos(a) * r * 0.85 + 1, y = 10 - Math.sin(a) * r * 0.9;
-    p.set(x - 4, y, col(Math.round(x), Math.round(y)));
-  }
-  for (let y = 10; y < 44; y++) p.set(10, y, mix(p.get(10, y), OUTLINE, 0.3));
-  p.outline(OUTLINE);
-  return frame(p, 9, 43);
-}
-
-function poleFrame(): Frame {
-  const p = new Pix(16, 70);
-  const red = rgb('#d82030'), white = rgb('#fff4f4');
-  for (let y = 12; y < 70; y++) for (let x = 5; x < 11; x++) p.set(x, y, ((x * 2 + y) >> 3) % 2 === 0 ? red : white);
-  for (let y = 12; y < 70; y++) { p.set(5, y, mix(p.get(5, y), rgb('#ffffff'), 0.4)); p.set(10, y, mix(p.get(10, y), OUTLINE, 0.35)); }
-  p.volume(p.shape(ramp('#a07010', '#f0c030', '#fff4a0'), (c, id) => p.circle(8, 7, 6, c, id)), ['#7a5008', '#c89020', '#f0c030', '#fff0a0', '#ffffff'].map(rgb));
-  p.outline(OUTLINE);
-  return frame(p, 8, 69);
-}
-
 function lampFrame(): Frame {
   const p = new Pix(14, 52);
   p.rect(6, 10, 2, 42, rgb('#2a2e3a'));
@@ -334,111 +310,6 @@ function lampFrame(): Frame {
   return frame(p, 7, 51);
 }
 
-function presentFrame(box: string, rib: string, w = 12, h = 12): Pix {
-  const p = new Pix(w + 4, h + 5);
-  const b = rgb(box), r = rgb(rib);
-  const id = p.newPart();
-  p.rect(2, 5, w, h, b, id);
-  p.shade(id, [mix(b, OUTLINE, 0.4), b, mix(b, rgb('#ffffff'), 0.35)]);
-  p.rect(2, 4, w, 2, mix(b, rgb('#ffffff'), 0.2));
-  const mx = 2 + Math.floor(w / 2) - 1;
-  p.rect(mx, 4, 2, h + 1, r);
-  p.rect(2, 4 + Math.floor(h / 2), w, 2, r);
-  // bow
-  p.circle(mx - 2, 2, 2, r); p.circle(mx + 3, 2, 2, r);
-  p.set(mx - 2, 2, mix(r, OUTLINE, 0.4)); p.set(mx + 3, 2, mix(r, OUTLINE, 0.4));
-  p.outline(OUTLINE);
-  return p;
-}
-
-function pileFrame(): Frame {
-  const p = new Pix(56, 30);
-  const boxes: [string, string, number, number, number, number][] = [
-    ['#2a9a48', '#f0c030', 0, 12, 14, 14], ['#d02838', '#fff0f0', 14, 8, 16, 18], ['#3a6ad0', '#ffffff', 30, 14, 12, 12],
-    ['#e0b020', '#d02838', 40, 10, 12, 16], ['#a040c0', '#f0c030', 8, 0, 10, 10], ['#e06a20', '#2a9a48', 24, 0, 12, 10],
-  ];
-  for (const [b, r, x, y, w, h] of boxes) p.blit(presentFrame(b, r, w, h), x, y);
-  return frame(p, 28, 29);
-}
-
-function workshopFrame(): Frame {
-  const W = 180, H = 128;
-  const p = new Pix(W, H);
-  // log walls
-  const wall = p.newPart();
-  p.rect(18, 52, 144, 76, WOOD[2], wall);
-  for (let y = 52; y < 128; y++) for (let x = 18; x < 162; x++) {
-    const ly = (y - 52) % 8;
-    p.set(x, y, ly === 0 ? WOOD[1] : ly === 1 ? WOOD[3] : vnoise(x / 9, y, 4) > 0.6 ? WOOD[3] : WOOD[2]);
-  }
-  for (let y = 52; y < 128; y += 8) { p.circle(18, y + 4, 3, WOOD[3]); p.circle(161, y + 4, 3, WOOD[1]); }
-  // roof with a thick blanket of snow
-  p.poly([[6, 56], [90, 6], [174, 56]], WOOD[1]);
-  for (let x = 2; x < 178; x++) {
-    const top = 56 - (90 - Math.abs(x - 90)) * (50 / 84) - 3;
-    const th = 7 + vnoise(x / 6, 0, 3) * 4;
-    for (let y = Math.floor(top); y < top + th; y++) p.set(x, y, y < top + 1.5 ? SNOW[4] : y > top + th - 2 ? SNOW[2] : SNOW[3]);
-    // drips over the eaves
-    if (Math.abs(x - 90) > 80) for (let y = 56; y < 60 + hash(x, 0, 4) * 6; y++) p.set(x, y, SNOW[3]);
-  }
-  // chimney
-  p.rect(124, 14, 16, 26, rgb('#7a3a2a'));
-  for (let y = 14; y < 40; y += 4) for (let x = 124; x < 140; x++) if ((x + (y % 8 === 0 ? 0 : 4)) % 8 === 0 || y % 4 === 0) p.set(x, y, rgb('#5a2a1e'));
-  p.rect(122, 10, 20, 5, SNOW[4]);
-  // glowing windows
-  for (const wx of [34, 120]) {
-    p.rect(wx - 2, 70, 30, 26, WOOD[0]);
-    for (let y = 72; y < 94; y++) for (let x = wx; x < wx + 26; x++) p.set(x, y, gradient([[0, '#fff2b0'], [1, '#f09830']], (y - 72) / 22, x, y));
-    p.rect(wx + 12, 72, 2, 22, WOOD[0]); p.rect(wx, 82, 26, 2, WOOD[0]);
-    p.rect(wx - 3, 96, 32, 4, SNOW[3]);
-  }
-  // door with a wreath
-  p.rect(76, 82, 28, 46, WOOD[0]);
-  p.rect(78, 84, 24, 44, rgb('#8a2a22'));
-  for (let y = 86; y < 128; y += 10) p.rect(79, y, 22, 1, rgb('#6a1e18'));
-  p.set(98, 106, rgb('#f0c030')); p.set(98, 107, rgb('#f0c030'));
-  for (let a = 0; a < Math.PI * 2; a += 0.06) for (let r = 5; r < 9; r++) p.set(90 + Math.cos(a) * r, 64 + Math.sin(a) * r, hash(Math.round(a * 20), r, 3) < 0.15 ? rgb('#e02030') : (r & 1 ? rgb('#1e6a30') : rgb('#2a8a3a')));
-  p.rect(88, 71, 4, 4, rgb('#e02030'));
-  // string lights along the eaves
-  const bulbs = ['#ff4040', '#40ff70', '#ffd040', '#40a0ff'].map(rgb);
-  for (let x = 12, i = 0; x < 170; x += 8, i++) {
-    const y = 58 + Math.round(Math.sin((x - 12) / 158 * Math.PI) * 5);
-    p.set(x, y - 1, OUTLINE); p.rect(x, y, 2, 3, bulbs[i % 4]);
-  }
-  p.outline(OUTLINE);
-  return frame(p, W / 2, H - 1);
-}
-
-// ---------------------------------------------------------------- enemies
-
-function snowmanFrame(pose: number): Frame {
-  const W = 34, H = 46;
-  const p = new Pix(W, H);
-  const balls: [number, number, number][] = [[16, 36, 9], [16, 23, 7], [16, 12, 5.5]];
-  for (const [x, y, r] of balls) p.volume(p.shape(ramp('#8a9ccc', '#dce6fa', '#ffffff'), (c, id) => p.circle(x, y, r, c, id)), SNOW.slice(1));
-  // coal buttons, angry eyes, a carrot nose and a crooked top hat
-  for (const y of [19, 24, 29]) p.rect(16, y, 2, 2, rgb('#1a1a22'));
-  p.rect(16, 10, 2, 2, rgb('#1a1a22')); p.rect(19, 10, 2, 2, rgb('#1a1a22'));
-  p.line(15, 8, 18, 9, rgb('#1a1a22')); p.line(19, 9, 22, 7, rgb('#1a1a22'));
-  p.line(21, 12, 27, 13, rgb('#f07818'), 2);
-  p.set(27, 13, rgb('#ffb060'));
-  p.line(17, 15, 21, 14, rgb('#1a1a22'));
-  p.rect(10, 6, 13, 2, rgb('#1e1e28'));
-  p.rect(12, 0, 9, 6, rgb('#2a2a36'));
-  p.rect(12, 4, 9, 1, rgb('#c02030'));
-  // a red scarf
-  p.rect(10, 17, 13, 3, rgb('#c02030'));
-  p.rect(10, 18, 3, 7, rgb('#a01828'));
-  // stick arms: 0 idle, 1 wind up (snowball held behind), 2 throw
-  const stick = rgb('#5a3a20');
-  p.line(9, 22, 2, 18, stick, 1); p.line(4, 19, 2, 16, stick, 1);
-  if (pose === 0) { p.line(23, 22, 31, 19, stick, 1); p.line(29, 20, 31, 17, stick, 1); }
-  if (pose === 1) { p.line(22, 21, 24, 13, stick, 1); p.line(10, 21, 4, 10, stick, 1); p.volume(p.shape(ramp('#8a9ccc', '#dce6fa', '#ffffff'), (c, id) => p.circle(4, 8, 3, c, id)), SNOW.slice(2)); }
-  if (pose === 2) { p.line(23, 22, 32, 24, stick, 1); p.line(30, 24, 32, 27, stick, 1); }
-  p.outline(OUTLINE);
-  return frame(p, 16, 45);
-}
-
 function snowballFrames(): Frame[] {
   return [0, 1].map((k) => {
     const p = new Pix(8, 8);
@@ -447,21 +318,6 @@ function snowballFrames(): Frame[] {
     p.outline(OUTLINE);
     return frame(p, 4, 4);
   });
-}
-
-function bigballFrame(): Frame {
-  const p = new Pix(32, 32);
-  const id = p.newPart();
-  p.circle(15.5, 15.5, 13, SNOW[3], id);
-  // lumpy edge
-  for (let a = 0; a < Math.PI * 2; a += 0.5) p.circle(15.5 + Math.cos(a) * 12, 15.5 + Math.sin(a) * 12, 2 + hash(Math.round(a * 10), 0, 5) * 2, SNOW[3], id);
-  p.volume(id, SNOW, { pattern: (x, y) => (vnoise(x / 3, y / 3, 6) > 0.66 ? -1 : 0) });
-  // stuff it picked up rolling downhill: twigs, a rock, a boot
-  p.line(6, 10, 11, 13, rgb('#5a3a20'));
-  p.rect(20, 20, 4, 3, ROCK[3]);
-  p.rect(9, 21, 3, 3, rgb('#3a2a20'));
-  p.outline(OUTLINE);
-  return frame(p, 16, 16);
 }
 
 function puffFrames(): Frame[] {
@@ -529,215 +385,307 @@ function skierFrame(pose: Pose, skiDy = 0): Frame {
 
 // ---------------------------------------------------------------- Santa
 
-const SUIT = ['#4a0610', '#7a0a14', '#b01a24', '#d8302c', '#ff6a58'].map(rgb);
-const FUR = ['#7a88b0', '#b8c4e0', '#e4eaf8', '#ffffff'].map(rgb);
-const SKIN = ['#8a4836', '#c87a60', '#f0a888', '#ffd0b8'].map(rgb);
-const BOOT = ['#0e0a10', '#1e1820', '#34303a', '#4e4856'].map(rgb);
+// ---------------------------------------------------------------- outpost props
 
-interface SantaPose { bob?: number; legs?: [number, number, number, number]; crouch?: number; laugh?: boolean; down?: boolean }
+const STEEL = ['#12151c', '#222834', '#363e4e', '#505b70', '#7a879e'].map(rgb);
+const PLATE = ['#4a586e', '#7a8aa6', '#b4c2da', '#e8eef8'].map(rgb);
+const GLOW = ['#0a3a5a', '#1a8ac0', '#60d8ff', '#d8fcff'].map(rgb);
+const OLIVE = ['#1e2414', '#343e22', '#4e5c32', '#6e7e48'].map(rgb);
+const HAZ_Y = rgb('#e0a818'), HAZ_K = rgb('#1a1a1e');
 
-function drawSanta(o: SantaPose): Frame {
-  const W = 72, H = 88;
+function hazard(p: Pix, x: number, y: number, w: number, h: number) {
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) p.set(x + i, y + j, ((x + i + y + j) >> 2) % 2 === 0 ? HAZ_Y : HAZ_K);
+}
+
+/** A striped warning post with a red lamp on top, marking the outpost perimeter. */
+function beaconFrame(): Frame {
+  const p = new Pix(12, 48);
+  for (let y = 8; y < 48; y++) for (let x = 4; x < 8; x++) p.set(x, y, ((y >> 2) % 2 === 0) ? HAZ_Y : HAZ_K);
+  p.rect(3, 4, 6, 5, STEEL[2]);
+  p.rect(4, 1, 4, 4, rgb('#ff3a2a'));
+  p.set(4, 1, rgb('#ffb0a0'));
+  p.rect(2, 0, 8, 1, SNOW[4]);
+  p.outline(OUTLINE);
+  return frame(p, 6, 47);
+}
+
+/** A lattice radio mast. */
+function mastFrame(): Frame {
+  const W = 26, H = 96;
+  const p = new Pix(W, H);
+  const c = STEEL[3];
+  for (let y = 6; y < H; y++) {
+    const half = 2 + (y - 6) * 0.1;
+    p.set(13 - half, y, c); p.set(13 + half, y, c);
+    if (y % 10 === 6) for (let x = Math.round(13 - half); x <= 13 + half; x++) p.set(x, y, STEEL[2]);
+    const k = (y - 6) % 10;
+    p.set(13 - half + k * half / 5, y, STEEL[2]);
+  }
+  p.rect(12, 0, 2, 7, STEEL[3]);
+  p.rect(11, 0, 4, 2, rgb('#ff3a2a'));
+  for (const y of [30, 60]) p.rect(6, y, 14, 1, SNOW[3]);
+  p.outline(OUTLINE);
+  return frame(p, 13, H - 1);
+}
+
+/** Supply crates, a fuel drum and sandbags. */
+function cratesFrame(): Frame {
+  const p = new Pix(64, 32);
+  const crate = (x: number, y: number, w: number, h: number) => {
+    const id = p.newPart();
+    p.rect(x, y, w, h, OLIVE[2], id);
+    p.shade(id, [OLIVE[0], OLIVE[2], OLIVE[3]]);
+    p.rect(x + 1, y + 1, w - 2, 1, OLIVE[3]);
+    p.line(x + 1, y + 1, x + w - 2, y + h - 2, OLIVE[1]);
+    p.rect(x, y, w, 2, SNOW[3]);
+    p.rect(x + w / 2 - 3, y + h / 2, 6, 2, rgb('#c8b878'));
+  };
+  crate(0, 12, 18, 20); crate(18, 16, 16, 16); crate(6, 0, 14, 12);
+  // a fuel drum
+  const d = p.newPart();
+  p.rect(38, 8, 12, 24, rgb('#8a2a20'), d);
+  p.volume(d, ['#4a1410', '#8a2a20', '#c04a30', '#e07a50'].map(rgb));
+  for (const y of [14, 24]) p.rect(38, y, 12, 1, rgb('#4a1410'));
+  p.rect(38, 8, 12, 2, SNOW[3]);
+  // sandbags
+  for (let i = 0; i < 3; i++) p.volume(p.shape(ramp('#5a5038', '#8a7a58', '#b0a07a'), (c, id) => p.ellipse(52 + (i % 2) * 6, 28 - Math.floor(i / 2) * 5, 6, 3, c, id)), ['#4a4230', '#6e6448', '#8a7a58', '#b0a07a'].map(rgb));
+  p.outline(OUTLINE);
+  return frame(p, 32, 31);
+}
+
+/** A fortified arctic outpost: concrete bunker, blast door, radar dish and floodlights. */
+function outpostFrame(): Frame {
+  const W = 200, H = 124;
+  const p = new Pix(W, H);
+  const CON = ['#2a2e36', '#3e444e', '#565d68', '#727a86', '#9aa2ae'].map(rgb);
+  // main block with sloped armoured front
+  const body = p.newPart();
+  p.poly([[14, 124], [14, 54], [40, 42], [160, 42], [186, 54], [186, 124]], CON[2], body);
+  for (let y = 42; y < H; y++) for (let x = 14; x < 186; x++) {
+    if (p.part[y * W + x] !== body) continue;
+    const n = vnoise(x / 6, y / 6, 3);
+    let c = n > 0.65 ? CON[3] : n < 0.3 ? CON[1] : CON[2];
+    if ((y - 42) % 16 === 0 || (x - 14) % 28 === 0) c = CON[1];
+    if (x < 40 && y < 54 + (40 - x) * 0) c = CON[3];
+    p.set(x, y, c);
+  }
+  // snow drifted on the roof
+  for (let x = 12; x < 188; x++) {
+    const top = x < 40 ? 54 - (x - 14) * (12 / 26) : x > 160 ? 42 + (x - 160) * (12 / 26) : 42;
+    const th = 4 + vnoise(x / 5, 0, 7) * 4;
+    for (let y = Math.floor(top - th + 2); y < top + 2; y++) p.set(x, y, y < top - th + 3 ? SNOW[4] : SNOW[3]);
+  }
+  // blast door
+  p.rect(78, 70, 44, 54, CON[0]);
+  p.rect(80, 72, 40, 52, STEEL[2]);
+  for (let y = 76; y < 124; y += 8) p.rect(80, y, 40, 1, STEEL[1]);
+  p.rect(99, 72, 2, 52, STEEL[0]);
+  hazard(p, 78, 64, 44, 5);
+  // slit windows with warm light
+  for (const wx of [28, 140]) {
+    p.rect(wx - 1, 66, 34, 10, CON[0]);
+    for (let x = wx; x < wx + 32; x++) for (let y = 67; y < 75; y++) p.set(x, y, gradient([[0, '#ffe8a0'], [1, '#e08020']], (y - 67) / 8, x, y));
+    for (let x = wx + 7; x < wx + 32; x += 8) p.rect(x, 67, 1, 8, CON[0]);
+  }
+  // radar dish on a mount
+  p.rect(146, 22, 4, 20, STEEL[2]);
+  const dish = p.newPart();
+  p.ellipse(148, 16, 18, 7, PLATE[2], dish);
+  p.volume(dish, PLATE);
+  p.line(148, 16, 160, 8, STEEL[3], 1);
+  p.rect(160, 6, 3, 3, rgb('#ff3a2a'));
+  // antenna and floodlights
+  p.rect(52, 6, 2, 36, STEEL[3]);
+  p.rect(51, 4, 4, 3, rgb('#ff3a2a'));
+  for (const fx of [24, 172]) {
+    p.rect(fx - 1, 36, 2, 8, STEEL[2]);
+    p.rect(fx - 5, 31, 10, 6, STEEL[1]);
+    p.rect(fx - 4, 32, 8, 4, rgb('#fff6d0'));
+  }
+  p.outline(OUTLINE);
+  return frame(p, W / 2, H - 1);
+}
+
+// ---------------------------------------------------------------- foes
+
+function grenadeFrames(): Frame[] {
+  return [0, 1].map((k) => {
+    const p = new Pix(8, 8);
+    p.volume(p.shape(ramp('#1e2414', '#4e5c32', '#6e7e48'), (c, id) => p.ellipse(3.5, 4, 3, 2.5, c, id)), OLIVE);
+    p.set(k ? 2 : 5, 1, STEEL[4]); p.set(3, 1, STEEL[3]);
+    p.outline(OUTLINE);
+    return frame(p, 4, 4);
+  });
+}
+
+/** A crystal-crusted ice boulder breaking loose and rolling downhill. */
+function boulderFrame(): Frame {
+  const p = new Pix(32, 32);
+  const id = p.newPart();
+  p.poly([[16, 2], [26, 6], [30, 15], [27, 25], [17, 30], [6, 27], [2, 17], [6, 6]], ROCK[2], id);
+  p.volume(id, ROCK.slice(1));
+  // icy facets catching the light
+  const facets: [number, number][][] = [[[8, 8], [16, 4], [14, 13]], [[18, 6], [26, 9], [20, 15]], [[5, 18], [12, 15], [10, 24]]];
+  for (const f of facets) { p.poly(f, ICE[2]); p.line(f[0][0], f[0][1], f[1][0], f[1][1], ICE[4]); }
+  p.line(16, 16, 24, 22, ROCK[0]); p.line(16, 16, 12, 26, ROCK[0]);
+  p.ellipse(16, 5, 7, 2, SNOW[4]);
+  p.outline(OUTLINE);
+  return frame(p, 16, 16);
+}
+
+const arcticLook: Look = {
+  skin: ramp('#8a5a3a', '#c08860', '#e0b088'),
+  hair: ramp('#1a1a1a', '#2a2a2a', '#3a3a3a'),
+  head: 'helmet',
+  headColor: ramp('#8a96b8', '#d4dcf0', '#ffffff'),
+  accent: ramp('#06343a', '#1a8a9a', '#7ae8f0'),
+  torso: ramp('#8a96b8', '#d4dcf0', '#ffffff'),
+  vest: ramp('#2e3648', '#48546c', '#6a7896'),
+  pants: ramp('#7a86a8', '#b8c4e0', '#e8eef8'),
+  boots: ramp('#1a1a22', '#2e2e3a', '#4a4a58'),
+  gun: ramp('#22232c', '#4a4c5a', '#8a8ea0'),
+  bulk: 1,
+};
+
+/** Arctic grenadier: 0 aiming, 1 arm back with a grenade, 2 follow-through. */
+function grenadierFrame(pose: number): Frame {
+  const pp: Pose = pose === 0 ? { hipX: -1, hipY: -15, lean: 2, legs: [-14, -6, 16, 8], aim: 0 }
+    : pose === 1 ? { hipX: -1, hipY: -15, lean: -8, legs: [-20, -6, 18, 10], aim: null, arms: 'up' }
+      : { hipX: 0, hipY: -15, lean: 14, legs: [-24, -4, 22, 6], aim: -25 };
+  return frame(drawHumanoid(arcticLook, pp), AX, AY);
+}
+
+// ---------------------------------------------------------------- the Glacier Walker
+
+interface WalkerPose { bob?: number; legs?: [number, number, number, number]; crouch?: number; vent?: boolean; down?: boolean }
+
+/** A two-legged assault walker in arctic armour. Its reactor core glows in the chest. */
+function drawWalker(o: WalkerPose): Frame {
+  const W = 80, H = 110;
   const p = new Pix(W, H);
   const fy = H - 1;
-  const cr = o.crouch ?? 0;
-  const bob = (o.bob ?? 0) + cr;
-  const [bdx, blift, fdx, flift] = o.legs ?? [0, 0, 0, 0];
   if (o.down) {
-    // sat down hard in the snow, legs out front, seeing stars
-    const hipY = fy - 10;
-    for (const [x, d] of [[30, 0], [40, 1]] as [number, number][]) {
+    // collapsed in a heap, reactor dark
+    for (const [x, d] of [[20, 0], [50, 1]] as [number, number][]) {
       const id = p.newPart();
-      p.line(x, hipY, x + 16, hipY + 2 - d, SUIT[2], 9, id);
-      p.volume(id, SUIT.slice(1));
-      p.volume(p.shape(ramp('#0e0a10', '#1e1820', '#4e4856'), (c, k) => p.ellipse(x + 20, hipY - 1 - d, 5, 7, c, k)), BOOT);
+      p.line(x, fy - 6 - d, x + 18, fy - 3, STEEL[2 + d], 7, id);
+      p.volume(id, STEEL.slice(d));
+      p.poly([[x + 14, fy], [x + 28, fy], [x + 24, fy - 6], [x + 14, fy - 6]], STEEL[1]);
     }
-    const body = p.newPart();
-    p.ellipse(30, fy - 26, 21, 19, SUIT[3], body);
-    p.volume(body, SUIT);
-    p.rect(10, fy - 22, 41, 5, BOOT[1]);
-    p.rect(30, fy - 23, 8, 7, rgb('#f0c030'));
-    p.rect(32, fy - 21, 4, 3, BOOT[1]);
-    const beard = p.newPart();
-    p.ellipse(30, fy - 42, 11, 10, FUR[3], beard);
-    p.volume(beard, FUR);
-    p.volume(p.shape(ramp('#8a4836', '#f0a888', '#ffd0b8'), (c, k) => p.ellipse(30, fy - 52, 8, 6, c, k)), SKIN);
-    p.circle(35, fy - 50, 2, rgb('#e86a6a'));
-    // dizzy x eyes
-    for (const ex of [27, 33]) { p.set(ex - 1, fy - 55, OUTLINE); p.set(ex + 1, fy - 53, OUTLINE); p.set(ex, fy - 54, OUTLINE); p.set(ex + 1, fy - 55, OUTLINE); p.set(ex - 1, fy - 53, OUTLINE); }
-    const hat = p.newPart();
-    p.poly([[22, fy - 56], [38, fy - 56], [14, fy - 64]], SUIT[3], hat);
-    p.volume(hat, SUIT.slice(1));
-    p.rect(20, fy - 58, 20, 4, FUR[3]);
-    p.circle(13, fy - 64, 3, FUR[3]);
+    const hull = p.newPart();
+    p.poly([[14, fy - 6], [66, fy - 10], [70, fy - 30], [58, fy - 40], [22, fy - 38], [10, fy - 22]], STEEL[2], hull);
+    p.volume(hull, STEEL);
+    p.poly([[30, fy - 38], [58, fy - 40], [66, fy - 30], [42, fy - 28]], PLATE[1]);
+    p.circle(40, fy - 20, 7, STEEL[0]); p.circle(40, fy - 20, 4, rgb('#2a1a14'));
+    p.line(30, fy - 30, 38, fy - 18, OUTLINE); p.line(52, fy - 34, 58, fy - 22, OUTLINE);
+    hazard(p, 18, fy - 12, 44, 3);
     p.outline(OUTLINE);
-    return frame(p, 34, fy);
+    return frame(p, 40, fy);
   }
-  const hipY = fy - 20 + bob;
-  // legs: red trousers tucked into big black boots
+  const cr = o.crouch ?? 0;
+  const hy = fy - 36 + cr + (o.bob ?? 0);
+  const [bdx, blift, fdx, flift] = o.legs ?? [0, 0, 0, 0];
+  // reverse-jointed legs with claw feet
   const leg = (x: number, dx: number, lift: number, back: boolean) => {
-    const ky = hipY + 9 - lift * 0.5, fx = x + dx, ffy = fy - lift;
-    const id = p.newPart();
-    p.line(x, hipY, x + dx * 0.5, ky, back ? SUIT[1] : SUIT[2], 9, id);
-    p.volume(id, back ? SUIT.slice(0, 4) : SUIT.slice(1));
-    const b = p.newPart();
-    p.rect(fx - 5, ky, 10, ffy - ky - 3, BOOT[1], b);
-    p.ellipse(fx + 2, ffy - 3, 7, 3.5, BOOT[1], b);
-    p.volume(b, back ? BOOT.slice(0, 3) : BOOT);
-    p.rect(fx - 6, ky - 1, 12, 3, back ? FUR[1] : FUR[2]);
+    const cols = back ? STEEL.slice(0, 4) : STEEL.slice(1);
+    const kx = x + 10 + dx * 0.4, ky = hy + 13 - lift * 0.4 + cr * 0.3;
+    const ax = x - 2 + dx, ay = fy - 8 - lift;
+    const t = p.newPart(); p.line(x, hy, kx, ky, cols[2], 9, t); p.volume(t, cols);
+    const s = p.newPart(); p.line(kx, ky, ax, ay, cols[1], 7, s); p.volume(s, cols);
+    p.line(x + 2, hy + 4, ax + 2, ay - 2, back ? STEEL[0] : STEEL[3], 1);
+    const f = p.newPart();
+    p.poly([[ax - 9, fy - lift], [ax + 13, fy - lift], [ax + 9, fy - 6 - lift], [ax - 6, fy - 8 - lift]], cols[2], f);
+    p.volume(f, cols);
+    p.circle(kx, ky, 3.5, back ? STEEL[1] : PLATE[1]);
   };
-  leg(28, bdx, blift, true);
-  leg(42, fdx, flift, false);
-  // the free arm: a fist planted on the hip
-  const arm = p.newPart();
-  p.line(22, hipY - 34, 14, hipY - 20, SUIT[1], 8, arm);
-  p.line(14, hipY - 20, 22, hipY - 12, SUIT[1], 7, arm);
-  p.volume(arm, SUIT.slice(0, 4));
-  // the belly
-  const body = p.newPart();
-  p.ellipse(36, hipY - 22, 22, 21, SUIT[3], body);
-  p.ellipse(34, hipY - 38, 15, 10, SUIT[3], body);
-  p.volume(body, SUIT);
-  // fur hem and the fur strip down the front
-  const hem = p.newPart();
-  for (let x = 16; x <= 56; x++) {
-    const yb = hipY - 4 + Math.round(Math.sqrt(Math.max(0, 1 - ((x - 36) / 21) ** 2)) * 4);
-    for (let y = yb - 4; y <= yb; y++) p.set(x, y, FUR[2], hem);
-  }
-  for (let y = hipY - 34; y < hipY - 4; y++) { const x = 50 + Math.round((y - (hipY - 20)) ** 2 / 120); p.rect(x - 3, y, 5, 1, FUR[2], hem); }
-  p.volume(hem, FUR);
-  // belt and buckle
-  p.rect(14, hipY - 21, 44, 6, BOOT[1]);
-  p.rect(14, hipY - 21, 44, 1, BOOT[3]);
-  p.rect(42, hipY - 23, 10, 10, rgb('#f0c030'));
-  p.rect(44, hipY - 21, 6, 6, BOOT[1]);
-  p.set(42, hipY - 23, rgb('#fff4a0'));
-  // mitten on the hip
-  p.volume(p.shape(ramp('#0e0a10', '#1e1820', '#4e4856'), (c, k) => p.circle(21, hipY - 13, 4, c, k)), BOOT);
-  // head
-  const hx = o.laugh ? 40 : 42, hy = hipY - 52 + (o.laugh ? -2 : 0);
-  p.volume(p.shape(ramp('#8a4836', '#f0a888', '#ffd0b8'), (c, k) => p.ellipse(hx, hy, 9, 9, c, k)), SKIN);
-  // a big white beard spilling over the chest
-  const beard = p.newPart();
-  p.ellipse(hx - 1, hy + 13, 12, 11, FUR[3], beard);
-  p.ellipse(hx + 1, hy + 20, 8, 7, FUR[3], beard);
-  p.ellipse(hx - 7, hy + 5, 4, 6, FUR[3], beard);
-  p.volume(beard, FUR, { pattern: (x, y) => ((x + y * 3) % 7 === 0 ? -1 : 0) });
-  // mustache, nose, cheek, angry brow
-  const stache = p.newPart();
-  p.ellipse(hx + 3, hy + 6, 7, 2.5, FUR[3], stache);
-  p.volume(stache, FUR.slice(1));
-  p.volume(p.shape(ramp('#a03030', '#e86a6a', '#ffb0a0'), (c, k) => p.circle(hx + 7, hy + 3, 2.5, c, k)), ['#8a2a2a', '#c84848', '#e86a6a', '#ffb0a0'].map(rgb));
-  p.rect(hx, hy + 2, 2, 2, rgb('#ff8a8a'));
-  if (o.laugh) {
-    p.ellipse(hx + 3, hy + 11, 4, 3, rgb('#4a0a14'));
-    p.rect(hx + 1, hy + 9, 5, 1, rgb('#ffffff'));
-    p.line(hx + 1, hy - 1, hx + 3, hy - 2, OUTLINE); p.line(hx + 3, hy - 2, hx + 5, hy - 1, OUTLINE);
-    p.line(hx + 1, hy - 4, hx + 5, hy - 4, FUR[3]);
-  } else {
-    p.rect(hx + 3, hy - 1, 2, 2, OUTLINE);
-    p.set(hx + 3, hy - 1, rgb('#ffffff'));
-    p.line(hx, hy - 5, hx + 6, hy - 2, FUR[3], 2);
-    p.line(hx + 1, hy - 3, hx + 6, hy - 2, OUTLINE);
-  }
-  // the hat flops back
-  const hat = p.newPart();
-  p.poly([[hx - 10, hy - 8], [hx + 9, hy - 9], [hx + 2, hy - 18], [hx - 14, hy - 20], [hx - 24, hy - 11]], SUIT[3], hat);
-  p.volume(hat, SUIT.slice(1));
-  const brim = p.newPart();
-  p.rect(hx - 11, hy - 11, 22, 5, FUR[3], brim);
-  p.ellipse(hx - 11, hy - 9, 2, 2.5, FUR[3], brim);
-  p.volume(brim, FUR);
-  p.volume(p.shape(ramp('#7a88b0', '#ffffff', '#ffffff'), (c, k) => p.circle(hx - 25, hy - 9, 4, c, k)), FUR);
+  leg(30, bdx, blift, true);
+  leg(46, fdx, flift, false);
+  // missile pod on the back
+  const pod = p.newPart();
+  p.rect(6, hy - 62, 20, 16, STEEL[2], pod);
+  p.volume(pod, STEEL.slice(1));
+  for (let i = 0; i < 3; i++) { p.rect(9 + i * 5, hy - 62, 3, 3, STEEL[0]); p.set(10 + i * 5, hy - 61, rgb('#ff5a3a')); }
+  hazard(p, 6, hy - 50, 20, 2);
+  p.line(28, hy - 50, 24, hy - 70, STEEL[3]);
+  p.rect(23, hy - 72, 3, 3, rgb('#ff3a2a'));
+  // armoured hull
+  const hull = p.newPart();
+  p.poly([[16, hy - 4], [62, hy - 8], [68, hy - 32], [58, hy - 50], [24, hy - 48], [12, hy - 30]], STEEL[2], hull);
+  p.volume(hull, STEEL);
+  const plate = p.newPart();
+  p.poly([[30, hy - 48], [58, hy - 50], [67, hy - 36], [42, hy - 34]], PLATE[1], plate);
+  p.volume(plate, PLATE);
+  for (let x = 32; x < 60; x++) if (hash(x, 0, 3) < 0.5) p.set(x, hy - 49 + Math.round((x - 32) * -0.05), SNOW[4]);
+  // cockpit visor
+  p.line(48, hy - 43, 63, hy - 39, OUTLINE, 3);
+  p.line(49, hy - 43, 62, hy - 39, o.vent ? GLOW[3] : GLOW[2], 1);
+  // reactor core: the weak point
+  p.circle(40, hy - 22, 9, STEEL[0]);
+  const core = p.newPart();
+  p.circle(40, hy - 22, 6.5, GLOW[2], core);
+  p.volume(core, o.vent ? [GLOW[2], GLOW[3], GLOW[3], rgb('#ffffff')] : GLOW);
+  p.rect(39, hy - 25, 2, 2, rgb('#ffffff'));
+  for (let a = 0; a < 6; a++) p.set(40 + Math.cos(a) * 8, hy - 22 + Math.sin(a) * 8, STEEL[3]);
+  hazard(p, 18, hy - 11, 42, 3);
+  // shoulder vents
+  if (o.vent) for (const vx of [20, 28]) p.rect(vx, hy - 47, 4, 3, rgb('#ffb040'));
   p.outline(OUTLINE);
-  return frame(p, 36, fy);
+  return frame(p, 40, fy);
 }
 
-function armFrame(): Frame {
-  const p = new Pix(28, 14);
+function mechArmFrame(): Frame {
+  const p = new Pix(32, 16);
   const id = p.newPart();
-  p.line(3, 7, 17, 7, SUIT[3], 9, id);
-  p.volume(id, SUIT.slice(1));
-  p.rect(16, 2, 4, 10, FUR[3]);
-  p.rect(16, 2, 1, 10, FUR[1]);
-  p.volume(p.shape(ramp('#0e0a10', '#1e1820', '#4e4856'), (c, k) => p.circle(23, 7, 4.5, c, k)), BOOT);
+  p.line(4, 8, 21, 8, STEEL[2], 9, id);
+  p.volume(id, STEEL.slice(1));
+  p.line(5, 5, 20, 5, PLATE[1], 1);
+  hazard(p, 12, 10, 6, 2);
+  p.circle(4, 8, 4, PLATE[1]);
+  // clamp hand
+  p.rect(22, 3, 8, 3, STEEL[3]); p.rect(22, 10, 8, 3, STEEL[3]);
+  p.rect(21, 4, 3, 8, STEEL[1]);
   p.outline(OUTLINE);
-  return frame(p, 3, 7);
+  return frame(p, 4, 8);
 }
 
-/**
- * The sack: a big, saggy, flesh-coloured pouch, wrinkled and sprouting the odd
- * wiry hair, cinched at the neck with a red drawstring and stuffed with presents.
- * k: 0 hanging, 1 squashed on impact, 2 neck open for throwing.
- */
-function sackFrame(k: number): Frame {
-  const W = 52, H = 56;
+/** The walker's piston hammer. k = 1 glows white-hot after a strike. */
+function hammerFrame(k: number): Frame {
+  const W = 40, H = 62;
   const p = new Pix(W, H);
-  const FLESH = ['#5a2a26', '#8a4a3e', '#b8705e', '#dc9a82', '#f4c0a6'].map(rgb);
-  const rng = new RNG(99);
-  const cx = 26;
-  const sq = k === 1 ? 1 : 0;
-  const ry = sq ? 14 : 17, rx = sq ? 23 : 20, cy = sq ? 38 : 34;
-  // presents peeking out of the neck
-  if (k === 2) {
-    p.blit(presentFrame('#2a9a48', '#f0c030', 10, 10), cx - 12, 0);
-    p.blit(presentFrame('#3a6ad0', '#ffffff', 10, 9), cx + 1, 1);
-  } else {
-    p.rect(cx - 6, 1, 7, 6, rgb('#2a9a48')); p.rect(cx - 3, 1, 1, 6, rgb('#f0c030'));
-    p.rect(cx + 1, 2, 6, 5, rgb('#d02838')); p.rect(cx + 1, 4, 6, 1, rgb('#fff0f0'));
-  }
-  const body = p.newPart();
-  // the gathered neck flares out into the pouch
-  const neckTop = k === 2 ? 8 : 5;
-  for (let y = neckTop; y < cy; y++) {
-    const t = (y - neckTop) / (cy - neckTop);
-    const w = (k === 2 ? 6 : 5) + t * t * rx * 0.9;
-    for (let x = Math.floor(cx - w); x <= cx + w; x++) p.set(x, y, FLESH[3], body);
-  }
-  p.ellipse(cx, cy, rx, ry, FLESH[3], body);
-  // a heavy, saggy bottom that bulges to either side
-  p.ellipse(cx - 7, cy + ry * 0.45, rx * 0.55, ry * 0.55, FLESH[3], body);
-  p.ellipse(cx + 7, cy + ry * 0.45, rx * 0.55, ry * 0.55, FLESH[3], body);
-  p.volume(body, FLESH);
-  // wrinkles: crinkled creases running around the pouch
-  for (const [yy, len] of [[cy - 9, 0.45], [cy - 1, 0.7], [cy + 7, 0.55]] as [number, number][]) {
-    const half = rx * len;
-    const off = rng.range(-3, 3);
-    for (let x = cx - half + off; x < cx + half + off; x += 1) {
-      const y = yy + Math.sin(x / 2.3 + yy) * 1.2 + Math.abs(x - cx) * 0.18;
-      if (p.part[Math.round(y) * W + Math.round(x)] === body && Math.sin(x * 1.7 + yy) > -0.3) p.over(x, y, FLESH[2]);
-      if (Math.sin(x * 1.7 + yy) > 0.4) p.over(x, y - 1, FLESH[4]);
-    }
-  }
-  // a seam down the middle where the cloth was stitched together
-  for (let y = cy - ry + 4; y < cy + ry + 3; y++) {
-    const x = cx + Math.sin(y / 3) * 0.8;
-    p.over(x, y, FLESH[1]);
-    if (y % 3 === 0) p.over(x + 1, y, FLESH[2]);
-  }
-  // drawstring
-  p.rect(cx - 7, neckTop + 3, 14, 3, rgb('#c01828'));
-  p.rect(cx - 7, neckTop + 3, 14, 1, rgb('#ff5a50'));
-  p.line(cx + 6, neckTop + 5, cx + 10, neckTop + 12, rgb('#c01828'));
-  p.line(cx + 5, neckTop + 5, cx + 7, neckTop + 13, rgb('#c01828'));
+  const h = p.newPart();
+  p.rect(17, 0, 6, 32, STEEL[2], h);
+  p.volume(h, STEEL.slice(1));
+  for (let y = 4; y < 28; y += 6) p.rect(17, y, 6, 2, STEEL[0]);
+  const head = p.newPart();
+  p.rect(3, 30, 34, 28, STEEL[2], head);
+  p.volume(head, STEEL);
+  p.rect(1, 32, 4, 24, STEEL[1]); p.rect(35, 32, 4, 24, STEEL[1]);
+  p.rect(3, 30, 34, 3, PLATE[2]);
+  for (let x = 3; x < 37; x++) if (hash(x, 1, 5) < 0.6) p.set(x, 29, SNOW[4]);
+  const hot = k === 1;
+  for (const y of [38, 46]) for (let x = 6; x < 34; x++) p.set(x, y, hot ? (x % 3 ? GLOW[3] : rgb('#ffffff')) : (x % 4 ? GLOW[1] : GLOW[2]));
+  p.rect(3, 55, 34, 3, hot ? GLOW[3] : STEEL[3]);
   p.outline(OUTLINE);
-  // wiry hairs, curling off the surface and past the outline
-  const hair = rgb('#2a1610');
-  const pts: [number, number][] = [];
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (p.part[y * W + x] === body) pts.push([x, y]);
-  for (let i = 0; i < 34; i++) {
-    const [x, y] = pts[Math.floor(rng.next() * pts.length)];
-    if (y < cy - ry + 6) continue;
-    const dir = x < cx ? -1 : 1;
-    let hx = x, hy = y;
-    const n = 3 + Math.floor(rng.next() * 3);
-    for (let s = 0; s < n; s++) {
-      p.set(hx, hy, hair);
-      hx += dir * (rng.next() < 0.7 ? 1 : 0);
-      hy += s % 2 === 0 ? 1 : (rng.next() < 0.5 ? -1 : 0);
-    }
-  }
-  return frame(p, cx, 3);
+  return frame(p, 20, 2);
+}
+
+/** A cluster mine fired from the walker's missile pod. */
+function mineFrame(): Frame {
+  const p = new Pix(14, 14);
+  p.volume(p.shape(ramp('#12151c', '#363e4e', '#7a879e'), (c, id) => p.circle(7, 8, 5, c, id)), STEEL);
+  p.rect(1, 7, 2, 2, STEEL[3]); p.rect(11, 7, 2, 2, STEEL[3]); p.rect(6, 1, 2, 3, STEEL[3]);
+  p.rect(6, 7, 2, 2, rgb('#ff3a2a'));
+  p.outline(OUTLINE);
+  return frame(p, 7, 13);
+}
+
+function scrapFrames(): Frame[] {
+  return [0, 1].map((k) => {
+    const p = new Pix(8, 6);
+    p.poly(k ? [[0, 1], [7, 0], [6, 5], [1, 4]] : [[1, 0], [6, 2], [5, 5], [0, 3]], k ? PLATE[1] : STEEL[3]);
+    p.outline(OUTLINE);
+    return frame(p, 4, 3);
+  });
 }
 
 function shadowFrame(): Frame {
@@ -769,22 +717,21 @@ export function buildSnow(): SnowArt {
   return {
     sky: skyCanvas(), peaks: peaksCanvas(), firs: firsCanvas(), near: nearCanvas(),
     pine: [pineFrame(44, 1), pineFrame(60, 2), pineFrame(78, 3)],
-    rock: rockFrame(), cane: caneFrame(), pole: poleFrame(), workshop: workshopFrame(), pile: pileFrame(), lamp: lampFrame(),
-    snowman: [snowmanFrame(0), snowmanFrame(1), snowmanFrame(2)],
-    snowball: snowballFrames(), bigball: bigballFrame(), puff: puffFrames(), wave: waveFrames(), shard: shardFrame(),
+    rock: rockFrame(), beacon: beaconFrame(), mast: mastFrame(), outpost: outpostFrame(), crates: cratesFrame(), lamp: lampFrame(),
+    grenadier: [grenadierFrame(0), grenadierFrame(1), grenadierFrame(2)], grenade: grenadeFrames(),
+    snowball: snowballFrames(), boulder: boulderFrame(), puff: puffFrames(), wave: waveFrames(), shard: shardFrame(),
     skier: [skierFrame(sk([40, -25, 60, -20], 0)), skierFrame(sk([35, -30, 55, -25], 0, 22, -11))],
     skierAir: skierFrame({ hipX: -2, hipY: -14, lean: 10, legs: [55, -10, 70, 0], aim: 0 }, -3),
     thinIce: thinIceFrames(),
-    santa: {
-      stand: [drawSanta({}), drawSanta({ bob: 1 })],
-      walk: [drawSanta({ legs: [-5, 0, 5, 3] }), drawSanta({ legs: [-2, 3, 2, 0], bob: 1 }), drawSanta({ legs: [5, 3, -5, 0] }), drawSanta({ legs: [2, 0, -2, 3], bob: 1 })],
-      crouch: drawSanta({ crouch: 5, legs: [-3, 0, 3, 0] }),
-      air: drawSanta({ legs: [-4, 9, 4, 9], bob: -2 }),
-      laugh: drawSanta({ laugh: true, bob: 1 }),
-      down: drawSanta({ down: true }),
+    walker: {
+      stand: [drawWalker({}), drawWalker({ bob: 1 })],
+      walk: [drawWalker({ legs: [-6, 0, 6, 4] }), drawWalker({ legs: [-2, 3, 2, 0], bob: 1 }), drawWalker({ legs: [6, 4, -6, 0] }), drawWalker({ legs: [2, 0, -2, 3], bob: 1 })],
+      crouch: drawWalker({ crouch: 7, legs: [-4, 0, 4, 0] }),
+      air: drawWalker({ legs: [-5, 10, 5, 10], bob: -2, vent: true }),
+      vent: drawWalker({ vent: true }),
+      down: drawWalker({ down: true }),
     },
-    arm: armFrame(), sack: [sackFrame(0), sackFrame(1), sackFrame(2)],
-    present: [presentFrame('#d02838', '#f0c030'), presentFrame('#2a9a48', '#d02838'), presentFrame('#3a6ad0', '#ffffff')].map((p) => frame(p, 8, p.h - 1)),
+    arm: mechArmFrame(), hammer: [hammerFrame(0), hammerFrame(1)], mine: mineFrame(), scrap: scrapFrames(),
     shadow: shadowFrame(),
   };
 }
