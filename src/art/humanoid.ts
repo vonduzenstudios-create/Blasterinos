@@ -309,7 +309,7 @@ export interface HeroFrames {
   prone: Frame;
   curl: Frame[];
   hang: Frame;
-  /** Hanging from a rail by one hand, gun in the other, keyed by aim: f, uf, df, d. */
+  /** Hanging from a rail by one hand, gun in the other, keyed by aim: f, uf, u, df, d. */
   hangAim: Record<string, Frame>;
   /** Climbing along a rail hand over hand. */
   hangMove: Frame[];
@@ -359,7 +359,7 @@ export function buildHero(look: Look): HeroFrames {
     stand, run, air, curl,
     prone: frame(drawProne(look), 22, 40),
     hang: f({ hipX: 0, hipY: -16, lean: 0, legs: [-6, 4, 10, 18], aim: null, arms: 'up' }),
-    hangAim: Object.fromEntries(['f', 'uf', 'df', 'd'].map((a) => [a, f(hangPose(a))])),
+    hangAim: Object.fromEntries(['f', 'uf', 'u', 'df', 'd'].map((a) => [a, f(hangPose(a))])),
     hangMove: [1, 0.3, -1, -0.3].map((r, i) => f({ hipX: 0, hipY: -16, lean: 0, legs: i % 2 ? [-8, 2, 10, 20] : [4, 16, -4, 6], aim: null, arms: 'swing', reach: r })),
     hurt: f({ hipX: 0, hipY: -16, lean: -25, legs: [-30, -10, 20, 40], aim: null, arms: 'flail' }),
     dead: frame(drawDead(look), 22, 40),
