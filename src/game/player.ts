@@ -193,8 +193,9 @@ export class Player {
       if (this.safeT > 20 && g.world.groundBelow(b.x - 4, b.y + 1, 1) && g.world.groundBelow(b.x + 4, b.y + 1, 1)) this.lastSafe = { x: b.x, y: b.y };
     } else this.safeT = 0;
     this.wasGround = b.onGround;
-    // passing a rail catches it automatically; hold down to fall or jump past one
-    if (!down && !b.onGround && this.grabCool <= 0) {
+    // falling past a rail always catches it, whatever you're aiming (never on the way up);
+    // down + jump while hanging is how you drop through
+    if (!b.onGround && b.vy > 0 && this.grabCool <= 0) {
       const r = g.world.railAcross(b.x, prevY - HANG_DROP, b.y - HANG_DROP);
       if (r) { this.grab(r); this.draw(); return; }
     }
@@ -287,7 +288,7 @@ export class Player {
     const g = this.g, inp = g.input, b = this.body, r = this.rail;
     if (!r) { this.state = 'play'; return; }
     if (dirX !== 0) this.facing = dirX;
-    this.aim = down ? (dirX ? 'df' : 'd') : up && dirX ? 'uf' : 'f';
+    this.aim = down ? (dirX ? 'df' : 'd') : up ? (dirX ? 'uf' : 'u') : 'f';
     this.moving = false;
     // both hands are needed to climb, so shooting (or locking aim) holds you in place
     if (!this.locked && !inp.held('shoot') && dirX !== 0) {
